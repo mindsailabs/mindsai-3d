@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { caseStudies, smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
 
@@ -49,7 +50,9 @@ export function Act4Work() {
         </h2>
       </div>
 
-      {/* Featured-card metadata — anchored to viewport bottom centre */}
+      {/* Featured-card metadata — anchored to viewport bottom centre.
+          pointer-events-auto on the inner block so the "View case study"
+          link is clickable through the pointer-events-none parent. */}
       <div
         key={study.id}
         className="absolute bottom-[8vh] md:bottom-[10vh] left-0 right-0 flex flex-col items-center text-center px-4 md:px-6"
@@ -75,6 +78,16 @@ export function Act4Work() {
         <div className="text-text-primary/90 text-[12px] md:text-[15px] mt-2 max-w-[92vw] md:max-w-xl leading-snug">
           {study.metric}
         </div>
+
+        {/* Case-study deep-link — routes to /work/:id */}
+        <Link
+          to={`/work/${study.id}`}
+          className="pointer-events-auto mt-4 inline-flex items-center gap-2 text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-medium border-b border-brand-teal/30 hover:border-brand-teal pb-0.5 transition-colors"
+        >
+          <span>View case study</span>
+          <span>→</span>
+        </Link>
+
         <div className="mt-4 flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] text-text-secondary/60">
           {caseStudies.map((_, i) => (
             <div
