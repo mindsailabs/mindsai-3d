@@ -20,3 +20,7 @@ yarn-error.log*
 
 # Pre-optimization source videos (only the optimized ones in public/assets/Videos/ are used at runtime)
 public/assets/Videos/_originals/
+
+# Generated from tsc -b (tsconfig.node.json emits these; they shouldn't be committed)
+vite.config.d.ts
+vite.config.js

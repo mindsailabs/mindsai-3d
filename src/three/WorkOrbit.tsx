@@ -141,8 +141,7 @@ export function WorkOrbit() {
   const currentSlotRef = useRef(0)
   const lastFeaturedRef = useRef(-1)
 
-  useFrame((state) => {
-    const t = state.clock.elapsedTime
+  useFrame(() => {
     const sp = progress
     const act4Alpha = smoothFade(sp, 0.49, 0.55, 0.83, 0.861)
 

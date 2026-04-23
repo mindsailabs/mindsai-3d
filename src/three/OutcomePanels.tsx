@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame, useLoader } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { outcomes, smoothFade } from '../lib/copy'
@@ -278,7 +278,10 @@ function AnglingPanel({
   borderGeom,
   currentRotationRef,
 }: AnglingPanelProps) {
-  const [frontness, setFrontness] = useState(0)
+  // Frontness state only drives imperative material/scale updates inside
+  // useFrame — we don't render it, so we skip the value from destructuring
+  // to keep TS strict-mode happy.
+  const [, setFrontness] = useState(0)
   const panelScaleRef = useRef<THREE.Group>(null!)
   const image = useHtmlImage(bgSrc)
   const texture = useCompositeTexture(image, index, title, description)
