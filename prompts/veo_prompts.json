@@ -1,0 +1,131 @@
+{
+  "_meta": {
+    "purpose": "Veo 3.1 prompts for the 6 Phase-3 work-grid case study video loops. Each video plays on card hover. All must be seamless loops, monochrome-leaning with teal brand accent only, and must NOT contain logos/text/faces.",
+    "target": "Veo 3.1 (Gemini)",
+    "generated": "2026-04-22",
+    "brand_anchor_colors": {
+      "black": "#000000",
+      "teal": "#73C5CC"
+    }
+  },
+
+  "shared_specs": {
+    "resolution": "1920x1080",
+    "resolution_label": "1080p",
+    "aspect_ratio": "16:9",
+    "duration_seconds": 5,
+    "framerate": 24,
+    "codec": "H.264 MP4",
+    "seamless_loop": true,
+    "audio": "none",
+    "target_file_size_mb": 5,
+    "rationale": "1080p (not 720p) because: retina displays render at 2x, case-study modals may render the video at ~800-1200px wide, and the incremental file cost (~2MB per clip) is worth the future-proofing. 16:9 is the agency standard and composes cleanly in a grid. 5s hits Veo's native sweet spot, loops cleanly, and gives enough personality without overstaying. 24fps matches the site's cinematic register. Audio is none — the site has its own ambient soundtrack."
+  },
+
+  "shared_style_directive": {
+    "palette_discipline": "Monochrome-leaning. Pure black (#000000) or deep charcoal backgrounds. No saturated accent colors other than MindsAI brand teal #73C5CC — and only as a single rim highlight, reflection, or caustic hint. No warm oranges except where naturally motivated (amber liquid, tungsten interior, golden-hour). Never introduce magenta, cyan-beyond-teal, or chrome rainbow.",
+    "cinematography": "Premium commercial tier. Slow deliberate camera moves (dolly, drift, lateral glide). Shallow depth of field f/1.4-f/2.8 equivalent. Motion-blurred highlights. Film grain present but subtle.",
+    "motion_speed": "Slow. Half-speed of real-world pacing. Every move reads as intentional.",
+    "seamless_loop_rule": "First frame must match last frame position/lighting so the video loops without a visible cut. Favour continuous motion that returns to origin over one-way pans.",
+    "exclusions": "No logos, no typography, no human faces, no monitors/phones/screens, no stock clichés (binary code, rotating globes, circuit boards, glowing hexagons), no text overlays, no watermarks."
+  },
+
+  "prompts": [
+    {
+      "id": "case_01_northwood",
+      "case_study": "Northwood Atelier — Luxury Furniture, UK",
+      "output_path": "public/assets/veo/case_01_northwood.mp4",
+      "subject": "Extreme close-up of a hand-stitched saddle-brown leather surface on a heritage armchair, with a single row of aged brass nailheads running diagonally across frame and a dark walnut wood trim edge at the right side of frame",
+      "action": "Camera dollies slowly along the leather seam revealing the stitching texture; dust motes drift slowly through a warm golden key light entering from upper-left; fabric weave catches micro-reflections; at loop point, camera has returned to its origin so the motion continues seamlessly",
+      "style": "Atelier craftsman aesthetic. Dieter Appelt stillness meets Wes Anderson controlled palette. Museum-grade artifact lit like a relic.",
+      "camera": "Extreme macro close-up, horizontal dolly left-to-right then imperceptibly back, f/1.4 shallow depth of field, subtle parallax on wood edge, 4K sensor capture feel",
+      "lighting": "Single warm tungsten key light from upper-left at 45°, deep unplugged shadows filling the right third of frame, imperceptible teal rim fill from camera-right to break pure shadow",
+      "color_palette": "Charcoal (#1a1612) in shadows, saddle-brown leather mids, aged-brass highlights, a single sliver of teal (#73C5CC) rim on the deepest shadow edge, no other colors",
+      "duration_seconds": 5,
+      "aspect_ratio": "16:9",
+      "seamless_loop": true,
+      "exclusions": "No logos, no text, no faces, no clothing, no modern hardware"
+    },
+    {
+      "id": "case_02_helio",
+      "case_study": "Helio Clinic — Private Healthcare, London",
+      "output_path": "public/assets/veo/case_02_helio.mp4",
+      "subject": "A smooth travertine stone basin filled with still, shallow water; light caustic patterns from unseen overhead windows dance across the stone; the water surface is almost perfectly still with only the faintest ripple",
+      "action": "Camera drifts slowly from overhead-angled left toward centre; a single water droplet falls from above in ultra-slow motion and creates expanding concentric ripples; caustic light patterns shift across the stone; at loop point the surface has returned to stillness",
+      "style": "Aesop / Maison Zöe minimal-luxury spa. Serene, clinical-but-warm. Hiroshi Sugimoto contemplative.",
+      "camera": "Overhead-tilted-down POV, slow lateral drift, 50mm equivalent, crystal-clear focus on water surface, motion-blurred droplet",
+      "lighting": "Soft overhead daylight through unseen skylights, near-shadowless high-key, subtle teal caustic reflections on the stone around the basin edges",
+      "color_palette": "Bone-white to warm-cream stone, clear water, gentle teal (#73C5CC) in caustic reflections, no other colors",
+      "duration_seconds": 5,
+      "aspect_ratio": "16:9",
+      "seamless_loop": true,
+      "exclusions": "No logos, no text, no faces, no hands, no medical instruments"
+    },
+    {
+      "id": "case_03_orbit",
+      "case_study": "Orbit Capital — Wealth Management, Mayfair",
+      "output_path": "public/assets/veo/case_03_orbit.mp4",
+      "subject": "A Georgian Mayfair townhouse facade at deep blue twilight; pristine black front door with a polished brass knocker and a brass doorknob; one window to the right softly backlit by a warm interior tungsten lamp; wet cobblestones below reflecting the brass",
+      "action": "Camera glides laterally from right to left in ultra-slow lateral dolly, compressing the facade via telephoto; warm window light flickers subtly once during the pass; at loop point the camera has continued past the door and subtly returns to start position imperceptibly",
+      "style": "Ridley Scott Blade Runner meets Savile Row heritage. Quiet wealth. Monochromatic with one warm anchor.",
+      "camera": "Steadicam lateral dolly right-to-left, 85mm equivalent telephoto compression, f/2, slight hand-breath motion",
+      "lighting": "Blue-hour natural ambient (deep navy) plus one concealed warm tungsten source behind the right window creating an amber spill through fabric curtains, pool of light on wet pavement beneath",
+      "color_palette": "Deep charcoal to night-blue for the facade, warm amber interior spill, brass highlights, teal (#73C5CC) reflected in wet cobblestones as the only accent",
+      "duration_seconds": 5,
+      "aspect_ratio": "16:9",
+      "seamless_loop": true,
+      "exclusions": "No logos, no text, no faces, no visible house numbers or street signage"
+    },
+    {
+      "id": "case_04_kelvin",
+      "case_study": "Kelvin & Rowe — D2C Spirits, UK",
+      "output_path": "public/assets/veo/case_04_kelvin.mp4",
+      "subject": "A heavy-bottom crystal tumbler containing amber spirit and two large ice spheres; liquid swirling in slow motion from a just-completed pour; condensation beads on the glass surface",
+      "action": "Macro lens holds on the glass; liquid continues to swirl in slow motion revealing the spirit's colour depth; a single condensation bead rolls down the outside of the glass; ice cracks once with a microscopic shift; at loop end the swirl completes its cycle and begins again",
+      "style": "Ogilvy-era spirits cinematography via Jonathan Glazer. Premium, heritage, masculine without being aggressive.",
+      "camera": "Locked-off medium close-up, macro lens, f/2.8 with rack focus subtly between the glass surface and the liquid interior, slight breath in the handheld feel",
+      "lighting": "Strong warm golden backlight behind the glass creating a halo and lighting the liquid from within; deep shadow on the camera side; a single teal rim highlight on the left edge of the glass",
+      "color_palette": "Pure black background, amber-gold liquid, crystal-clear refractions, deep teal (#73C5CC) edge rim, no other colors",
+      "duration_seconds": 5,
+      "aspect_ratio": "16:9",
+      "seamless_loop": true,
+      "exclusions": "No logos, no text, no faces, no bottles with labels, no bar counter props"
+    },
+    {
+      "id": "case_05_marlow",
+      "case_study": "Marlow Studios — Architecture, International",
+      "output_path": "public/assets/veo/case_05_marlow.mp4",
+      "subject": "Macro perspective of a raw-concrete architectural scale model featuring a cantilevered slab and a narrow vertical slot window; ground-level POV; sky backdrop is desaturated grey-blue twilight",
+      "action": "Camera orbits in a slow arc around the base of the model; a directional low-angle golden light sweeps from camera-right to camera-left across the concrete, creating dramatic shadow play on the cantilever's underside; at loop end the light is back at its start position",
+      "style": "Peter Zumthor reverence. Koyaanisqatsi pacing. Hélène Binet architectural photography made kinetic.",
+      "camera": "Ground-level arc dolly, 85mm equivalent, f/2, slight tilt up, slow orbit",
+      "lighting": "Low-angle golden-hour directional key from one side plus soft sky fill; strong hard shadows cast by the cantilever; teal cool-shadow undertones in the fill side",
+      "color_palette": "Raw-concrete grey as mids, warm sand highlights, desaturated sky grey, subtle teal (#73C5CC) in the deep cool shadows, no other colors",
+      "duration_seconds": 5,
+      "aspect_ratio": "16:9",
+      "seamless_loop": true,
+      "exclusions": "No logos, no text, no faces, no blueprints visible, no modern CGI rendering look — this must feel physical and photographed"
+    },
+    {
+      "id": "case_06_aether",
+      "case_study": "Aether Labs — B2B SaaS, Series A",
+      "output_path": "public/assets/veo/case_06_aether.mp4",
+      "subject": "An obsidian-black glass horizontal surface with thin streams of teal light-particles flowing smoothly across it in multiple parallel lanes; the surface reflects the particles like a mirror; dark featureless void above",
+      "action": "Camera glides very low along the surface from left to right; particle streams flow continuously in the opposite direction at varying speeds; a single brighter pulse travels right-to-left along one stream; at loop end the pulse wraps around and begins again on the same stream",
+      "style": "Blade Runner 2049 interface aesthetic meets Anonymous Content minimal tech. Premium and calm — NOT corporate-SaaS. Not about data viz, about light.",
+      "camera": "Ultra-low dolly along the glass surface, 35mm equivalent, f/2 with subtle focus breathing, shallow depth so streams far from camera soften",
+      "lighting": "Single cold overhead ambient with the particle streams as the primary light source illuminating the glass; strong reflections on the mirror-surface double the visual density",
+      "color_palette": "Pure black (#000000) void, obsidian-black reflective glass, teal (#73C5CC) particle streams as the sole light colour, one bright near-white pulse accent, no other colours",
+      "duration_seconds": 5,
+      "aspect_ratio": "16:9",
+      "seamless_loop": true,
+      "exclusions": "No logos, no text, no faces, no monitors/screens/devices, no literal code characters, no UI elements, no grid lines, no data visualisations"
+    }
+  ],
+
+  "generation_notes_for_abhishek": {
+    "how_to_use": "Feed each prompt object to Veo 3.1 as a natural-language description. Flatten the structured fields into prose — most important fields to emphasise in the prompt text: subject, action, camera, lighting, colour palette, seamless_loop requirement, exclusions. Set Veo's aspect_ratio=16:9 and duration=5s at the API level. Turn off person_generation.",
+    "iteration_tips": "If a first generation looks too colourful, re-prompt emphasising 'desaturated except for teal #73C5CC accent'. If it looks too corporate/generic, re-prompt emphasising the cinematographer/reference names in 'style'. If the loop has a jump cut, re-prompt emphasising 'continuous motion that returns to origin — first frame matches last frame'.",
+    "drop_location": "All 6 MP4s go under public/assets/veo/ with the exact filenames in output_path. I'll wire the lazy-load + hover playback into each case study card in Phase 3."
+  }
+}
