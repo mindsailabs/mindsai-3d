@@ -4,7 +4,6 @@ import * as THREE from 'three'
 import Lenis from 'lenis'
 import { MindsMark } from './three/MindsMark'
 import { ParticleField } from './three/ParticleField'
-import { BackgroundFX } from './three/BackgroundFX'
 import { CausticsFloor } from './three/CausticsFloor'
 import { CameraRig } from './three/CameraRig'
 import { CapabilityNodes } from './three/CapabilityNodes'
@@ -86,23 +85,51 @@ export default function App() {
 
   return (
     <>
-      {/* Persistent 3D canvas */}
-      <div className="fixed inset-0 z-0">
+      {/* Atmospheric video layer — Veo-3.1-generated seamless loop of drifting
+          teal light strata + particles. Sits BEHIND the WebGL canvas. Muted,
+          autoplays, loops, playsInline for mobile Safari. Covers the whole
+          viewport with object-fit:cover so it never letterboxes.
+          Darkened with a dark overlay so it reads as atmospheric BED, not
+          foreground content. */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-black overflow-hidden">
+        <video
+          src="/assets/atmosphere_loop.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ opacity: 0.55 }}
+          aria-hidden="true"
+        />
+        {/* Dark edge vignette — keeps the centre strata visible (where the
+            atmosphere has most content) while fading the extreme edges to
+            near-black so vignette-style framing reads cinematic. */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(ellipse 90% 70% at center, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.6) 85%, rgba(0,0,0,0.95) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Persistent 3D canvas — TRANSPARENT so the video layer shows through.
+          alpha:true + no <color attach="background"> means the renderer
+          doesn't paint a black clear every frame. */}
+      <div className="fixed inset-0 z-[1]">
         <Canvas
           camera={{ position: [0, 0.1, 7.5], fov: 32 }}
           gl={{
             antialias: true,
-            alpha: false,
+            alpha: true,
             powerPreference: 'high-performance',
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
-          // DPR ceiling raised 2 → 3 so the 3D render matches the UI layer on
-          // retina / 3x displays (iPad Pro, iPhone 15+). Floor stays 1 so
-          // low-end GPUs don't choke.
           dpr={[1, 3]}
         >
-          <color attach="background" args={['#000000']} />
           {/* Linear fog: near = 9 world units (past the M), far = 26. Objects
               closer than 9u render fully (M stays crystal clear in the hero
               framing). Objects past 26u fade to pure black. Distant
@@ -112,7 +139,9 @@ export default function App() {
           <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
             <CameraRig />
-            <BackgroundFX />
+            {/* BackgroundFX removed — the Veo atmosphere video behind the
+                canvas replaces its role. Letting the canvas stay transparent
+                in empty areas means the cinematic backdrop breathes through. */}
             <ParticleField />
             <CausticsFloor />
             <MonumentFloor />
