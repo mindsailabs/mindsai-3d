@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../lib/store'
@@ -104,14 +104,39 @@ export function CameraRig() {
   const lookAtTarget = useRef(new THREE.Vector3())
   const desiredPos = useRef(new THREE.Vector3())
 
+  // Cursor-driven parallax: scene subtly follows the user's gaze. Mouse
+  // coords are normalized to [-1, 1]; a smoothed copy drives per-frame
+  // camera offset. Subtle amplitude (±0.35 X, ±0.2 Y) so it reads as
+  // "the scene is aware" rather than as a gimmick.
+  const mouseTarget = useRef({ x: 0, y: 0 })
+  const mouseSmoothed = useRef({ x: 0, y: 0 })
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      mouseTarget.current.x = (e.clientX / window.innerWidth) * 2 - 1
+      mouseTarget.current.y = -((e.clientY / window.innerHeight) * 2 - 1)
+    }
+    window.addEventListener('mousemove', onMove, { passive: true })
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [])
+
   useFrame((state) => {
     const t = state.clock.elapsedTime
     const { position, lookAt, fov } = getCameraAtProgress(scrollProgress)
 
+    // Ease mouse toward target — low factor so it feels like cinematic
+    // tracking, not a cursor leash.
+    mouseSmoothed.current.x = lerp(mouseSmoothed.current.x, mouseTarget.current.x, 0.045)
+    mouseSmoothed.current.y = lerp(mouseSmoothed.current.y, mouseTarget.current.y, 0.045)
+
     desiredPos.current.copy(position)
+    // Autopilot drift (existing) — keeps the camera breathing when idle.
     desiredPos.current.x += Math.sin(t * 0.13) * 0.08
     desiredPos.current.y += Math.cos(t * 0.11) * 0.05
     desiredPos.current.z += Math.sin(t * 0.08) * 0.05
+    // Cursor parallax offset.
+    desiredPos.current.x += mouseSmoothed.current.x * 0.35
+    desiredPos.current.y += mouseSmoothed.current.y * 0.2
 
     // Lerp 0.12 threads the needle between "cinematic" and "text stays
     // in sync with scroll." Lenis is already smoothing wheel input at 0.08,
@@ -120,6 +145,10 @@ export function CameraRig() {
     camera.position.lerp(desiredPos.current, 0.12)
 
     lookAtTarget.current.copy(lookAt)
+    // Pull lookAt toward cursor very gently — keeps the focus point
+    // "following gaze" so camera doesn't just translate past the subject.
+    lookAtTarget.current.x += mouseSmoothed.current.x * 0.12
+    lookAtTarget.current.y += mouseSmoothed.current.y * 0.08
     camera.lookAt(lookAtTarget.current)
 
     if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {

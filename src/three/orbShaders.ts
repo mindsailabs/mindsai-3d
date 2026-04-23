@@ -77,21 +77,26 @@ export const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform float uDisplacementStrength;
   uniform float uNoiseScale;
+  uniform float uVelocity;
 
   varying vec3 vWorldNormal;
   varying vec3 vWorldPosition;
   varying vec3 vViewDirection;
+  varying float vVelocity;
 
   void main() {
     vec3 np = position * uNoiseScale + vec3(uTime * 0.15);
     vec3 noise = curlNoise(np);
-    float disp = length(noise) * uDisplacementStrength;
+    // Velocity boosts displacement so fast scroll ripples the glass surface
+    // visibly, like a wave passing through water. Base + up to 5× on flick.
+    float disp = length(noise) * uDisplacementStrength * (1.0 + uVelocity * 5.0);
     vec3 displaced = position + normal * disp;
 
     vec4 worldPos = modelMatrix * vec4(displaced, 1.0);
     vWorldPosition = worldPos.xyz;
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
     vViewDirection = normalize(cameraPosition - worldPos.xyz);
+    vVelocity = uVelocity;
 
     gl_Position = projectionMatrix * viewMatrix * worldPos;
   }
@@ -106,10 +111,13 @@ export const fragmentShader = /* glsl */ `
   uniform float uFresnelPower;
   uniform float uFresnelBoost;
   uniform float uReflectionMix;
+  uniform float uTime;
+  uniform float uIridescenceStrength;
 
   varying vec3 vWorldNormal;
   varying vec3 vWorldPosition;
   varying vec3 vViewDirection;
+  varying float vVelocity;
 
   #define PI 3.14159265359
   #define TAU 6.28318530718
@@ -147,6 +155,20 @@ export const fragmentShader = /* glsl */ `
     return n;
   }
 
+  // Thin-film iridescence: map a phase value to a spectral rainbow colour.
+  // Phase is driven by (viewing angle + surface position + time) so the
+  // iridescent sheen subtly shifts as the viewer/camera moves relative
+  // to the glass. Cheap version — full spectral solver would be overkill.
+  vec3 iridescence(float phase) {
+    phase = fract(phase);
+    // Three sine waves offset by 120° → smooth rainbow.
+    return vec3(
+      0.5 + 0.5 * sin(phase * TAU + 0.0),
+      0.5 + 0.5 * sin(phase * TAU + 2.094),
+      0.5 + 0.5 * sin(phase * TAU + 4.189)
+    );
+  }
+
   void main() {
     vec3 N = normalize(vWorldNormal);
     vec3 V = normalize(vViewDirection);
@@ -157,9 +179,12 @@ export const fragmentShader = /* glsl */ `
     float scratchY = (surfaceNoise(vWorldPosition + 11.3) - 0.5) * 0.025;
     N = normalize(N + vec3(scratchX, scratchY, 0.0));
 
-    float iorR = 1.0 / (uIOR - uDispersion);
+    // Velocity-pumped dispersion: scrolling fast widens the RGB IOR split,
+    // so the rainbow fringe on bar edges visibly blooms during a flick.
+    float dispScale = uDispersion * (1.0 + vVelocity * 3.0);
+    float iorR = 1.0 / (uIOR - dispScale);
     float iorG = 1.0 / uIOR;
-    float iorB = 1.0 / (uIOR + uDispersion);
+    float iorB = 1.0 / (uIOR + dispScale);
 
     vec3 refR = refract(-V, N, iorR);
     vec3 refG = refract(-V, N, iorG);
@@ -189,8 +214,29 @@ export const fragmentShader = /* glsl */ `
     vec3 fringe = vec3(lumR - bodyLum, 0.0, lumB - bodyLum);
     color += fringe * fresnel * fresnel * 1.6;
 
-    // Teal ACCENT 1: Fresnel rim — the signature brand tell
-    color += uTint * fresnel * uFresnelBoost;
+    // IRIDESCENCE — thin-film-style spectral sheen. Clamped to the
+    // silhouette via fresnel^3 and weighted low so it's a *whisper* of
+    // rainbow, not a disco ball. The orb should read as premium dark
+    // glass first, iridescent second.
+    float iridPhase =
+      NdotV * 2.5
+      + vWorldPosition.y * 0.35
+      + uTime * 0.08;
+    vec3 iridColor = iridescence(iridPhase);
+    color += iridColor * fresnel * fresnel * fresnel * uIridescenceStrength;
+
+    // ANISOTROPY — subtle directional specular, also rim-gated. The
+    // stripe pattern simulates a polished brushed finish on the bars.
+    vec3 H = normalize(V + vec3(0.0, 1.0, 0.0));
+    float aniso = pow(max(dot(N, H), 0.0), 96.0);
+    aniso *= (0.5 + 0.5 * sin(vWorldPosition.y * 22.0));
+    // Gate by fresnel so the highlight only appears near edges, not across
+    // the flat face of the bar (which would read like a white box).
+    color += vec3(aniso) * 0.08 * fresnel;
+
+    // Teal ACCENT 1: Fresnel rim — the signature brand tell.
+    // Velocity pumps rim intensity so fast scroll makes the orb glow brighter.
+    color += uTint * fresnel * uFresnelBoost * (1.0 + vVelocity * 0.8);
 
     // Teal ACCENT 2: soft inner luminosity — orb whispers teal from within
     float inner = smoothstep(0.0, 0.7, 1.0 - NdotV);

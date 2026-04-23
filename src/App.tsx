@@ -80,6 +80,13 @@ export default function App() {
           dpr={[1, 3]}
         >
           <color attach="background" args={['#000000']} />
+          {/* Linear fog: near = 9 world units (past the M), far = 26. Objects
+              closer than 9u render fully (M stays crystal clear in the hero
+              framing). Objects past 26u fade to pure black. Distant
+              particles, outcome panels in their back positions, and the
+              far side of the work carousel pick up depth cueing — the
+              void gains volume. */}
+          <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
             <CameraRig />
             <BackgroundFX />

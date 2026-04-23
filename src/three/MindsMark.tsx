@@ -68,6 +68,14 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
       uReflectionMix: { value: 0.55 },
       uDisplacementStrength: { value: 0.0012 },
       uNoiseScale: { value: 1.2 },
+      // Scroll velocity (smoothed) — the shader uses this to pump dispersion
+      // and displacement when users flick scroll. Idle = 0, active scroll
+      // pushes it toward ~1.5. Populated from Lenis in useFrame.
+      uVelocity: { value: 0 },
+      // Iridescence strength — kept subtle so the orb still reads as
+      // premium dark glass first, with a whisper of rainbow sheen only
+      // at the silhouette.
+      uIridescenceStrength: { value: 0.18 },
     }),
     [hdr]
   )
@@ -82,11 +90,26 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
     return mat
   }, [])
 
+  // Smoothed scroll velocity — read from Lenis each frame. Exponential decay
+  // means a fast wheel-flick pumps the value up, then it eases back down
+  // over ~0.4s even if the user stops scrolling.
+  const smoothedVelocity = useRef(0)
+
   useFrame((state) => {
     const t = state.clock.elapsedTime
     const sp = scrollProgress
+
+    // Read Lenis velocity off window.__lenis (set by App.tsx). Normalise to
+    // roughly [0, 1.5] and decay toward target each frame.
+    const lenis = (window as unknown as { __lenis?: { velocity: number } }).__lenis
+    const rawVel = lenis ? Math.abs(lenis.velocity) : 0
+    const targetVel = Math.min(1.8, rawVel * 0.015)
+    smoothedVelocity.current +=
+      (targetVel - smoothedVelocity.current) * 0.14
+
     if (leftMatRef.current) {
       leftMatRef.current.uniforms.uTime.value = t
+      leftMatRef.current.uniforms.uVelocity.value = smoothedVelocity.current
     }
 
     // ---- Scroll-driven choreography ----

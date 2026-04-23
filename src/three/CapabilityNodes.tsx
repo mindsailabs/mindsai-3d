@@ -1,17 +1,22 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
+import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { capabilities, smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
 
 /**
  * Seven capability nodes orbiting the M during Act 3.
- * Each node is a small emissive teal sphere with an HTML label attached
- * (via drei's <Html>) that rotates with the node in 3D space.
  *
- * When a node is CLOSER to camera (in front of the orbit), its label fades
- * brighter; when it's behind the M, the label dims.
+ * v2 — SDF text labels (drei `<Text>`, backed by troika-three-text) replace
+ * the prior `<Html>` overlays. Benefits:
+ *   – Labels are rendered IN the WebGL scene so they z-sort naturally with
+ *     the M and the orbit ring. No more HTML-over-canvas overlap.
+ *   – No CSS transform subpixel blur at intermediate distances — SDF stays
+ *     crisp at any scale.
+ *   – Labels follow the orbit rotation automatically; no per-frame opacity
+ *     math to hide back-side labels (occlusion is handled by the depth
+ *     buffer against the M).
  */
 
 const NODE_COUNT = capabilities.length // 7
@@ -26,7 +31,9 @@ export function CapabilityNodes() {
   const groupRef = useRef<THREE.Group>(null!)
   const ringRef = useRef<THREE.Mesh>(null!)
   const nodeRefs = useRef<(THREE.Mesh | null)[]>([])
-  const labelRefs = useRef<(HTMLDivElement | null)[]>([])
+  // refs to each label's parent group so we can opacity-modulate based on
+  // front-ness (subtle, not hiding — just softening back labels).
+  const labelGroupRefs = useRef<(THREE.Group | null)[]>([])
 
   const nodeMaterial = useMemo(() => {
     const mat = new THREE.MeshBasicMaterial({
@@ -67,10 +74,6 @@ export function CapabilityNodes() {
     const act3Alpha = smoothFade(sp, 0.30, 0.35, 0.47, 0.506)
 
     if (groupRef.current) {
-      // Scroll-driven rotation: orbit rotates ~one full turn across Act 3.
-      // Tiny time drift for life but slow enough that labels stay readable.
-      // Act 3 span = 0.506 - 0.316 = 0.19; to make one full rotation, use 2π/0.19 ≈ 33.
-      // Current value chosen empirically to feel like a gentle pan, not a spin.
       const scrollRotation = (sp - 0.316) * 5.5
       groupRef.current.rotation.y = scrollRotation + t * 0.05
       groupRef.current.rotation.x = ORBIT_TILT_X
@@ -78,12 +81,6 @@ export function CapabilityNodes() {
       groupRef.current.visible = act3Alpha > 0.001
     }
 
-    // Per-node animation + label visibility based on world Z of the node.
-    // Nodes in front of origin (z > 0 in world) are closer to camera, nodes
-    // behind (z < 0) are occluded by the M. Back labels must fade aggressively
-    // because drei's <Html> renders HTML on top of the WebGL canvas — it has
-    // no z-sort with 3D geometry, so without fading the back labels would
-    // visually overlap the M bars.
     nodeRefs.current.forEach((mesh, i) => {
       if (!mesh) return
       const isHovered = hoveredCapability === i
@@ -92,17 +89,27 @@ export function CapabilityNodes() {
       mesh.scale.setScalar(basePulse * hoverBoost)
       mesh.material = isHovered ? hoveredNodeMaterial : nodeMaterial
 
+      // Label groups fade subtly by world z — front labels at ~1.0 opacity,
+      // back labels at ~0.2. SDF text z-sorts against the M naturally, but
+      // this smooths the feeling further (a back label is *also* faded
+      // mid-air, not just behind the M).
       const worldPos = new THREE.Vector3()
       mesh.getWorldPosition(worldPos)
-      // Compute "front-ness": 1 = camera-facing (+Z side), 0 = behind origin.
-      // ORBIT_RADIUS = 2.6, so worldPos.z ∈ [-2.6, +2.6].
-      const frontBias = Math.max(0, Math.min(1, (worldPos.z + ORBIT_RADIUS) / (2 * ORBIT_RADIUS)))
-      const label = labelRefs.current[i]
-      if (label) {
-        // Steep curve: only labels in the front half of the orbit are legible.
-        // Back labels vanish so their text doesn't overlap the M (the <Html>
-        // portal can't z-sort against the WebGL canvas).
-        label.style.opacity = `${Math.pow(frontBias, 3.5) * 0.98}`
+      const frontBias = Math.max(
+        0,
+        Math.min(1, (worldPos.z + ORBIT_RADIUS) / (2 * ORBIT_RADIUS))
+      )
+      const labelGroup = labelGroupRefs.current[i]
+      if (labelGroup) {
+        const targetOpacity = 0.2 + Math.pow(frontBias, 2.2) * 0.8
+        labelGroup.traverse((obj) => {
+          const mat = (obj as unknown as { material?: THREE.Material })
+            .material
+          if (mat && 'opacity' in mat) {
+            ;(mat as THREE.Material & { opacity: number }).opacity =
+              targetOpacity
+          }
+        })
       }
     })
   })
@@ -114,7 +121,6 @@ export function CapabilityNodes() {
         <torusGeometry args={[ORBIT_RADIUS, 0.006, 8, 96]} />
       </mesh>
 
-      {/* Nodes + labels */}
       {baseAngles.map((angle, i) => {
         const x = Math.cos(angle) * ORBIT_RADIUS
         const z = Math.sin(angle) * ORBIT_RADIUS
@@ -131,32 +137,43 @@ export function CapabilityNodes() {
             >
               <sphereGeometry args={[0.1, 32, 32]} />
             </mesh>
-            {/* Labels only attach during Act 3 — prevents bleeding into other acts.
-                This also avoids drei <Html> portal overhead when not needed. */}
-            {progress > 0.3 && progress < 0.52 && (
-              <Html
-                center
-                distanceFactor={6}
-                position={[0, 0.38, 0]}
-                zIndexRange={[10, 0]}
-                style={{ pointerEvents: 'none' }}
+            {/* SDF label group — billboards so text always reads front-on
+                regardless of orbit rotation. Two lines: M0x code in teal,
+                title in white. Positioned slightly above the node. */}
+            <Billboard follow={true} position={[0, 0.36, 0]}>
+              <group
+                ref={(g) => {
+                  labelGroupRefs.current[i] = g
+                }}
               >
-                <div
-                  ref={(d) => {
-                    labelRefs.current[i] = d
-                  }}
-                  className="whitespace-nowrap text-center transition-opacity duration-500"
-                  style={{ opacity: 0.35 }}
+                <Text
+                  fontSize={0.09}
+                  color="#73C5CC"
+                  anchorX="center"
+                  anchorY="bottom"
+                  position={[0, 0.02, 0]}
+                  letterSpacing={0.25}
+                  outlineWidth={0}
+                  material-toneMapped={false}
+                  material-transparent={true}
                 >
-                  <div className="text-brand-teal text-[9px] uppercase tracking-[0.25em] font-medium">
-                    {cap.code}
-                  </div>
-                  <div className="text-text-primary text-[13px] font-medium leading-tight mt-0.5">
-                    {cap.title}
-                  </div>
-                </div>
-              </Html>
-            )}
+                  {cap.code}
+                </Text>
+                <Text
+                  fontSize={0.15}
+                  color="#FFFFFF"
+                  anchorX="center"
+                  anchorY="top"
+                  position={[0, -0.04, 0]}
+                  fontWeight={500}
+                  outlineWidth={0}
+                  material-toneMapped={false}
+                  material-transparent={true}
+                >
+                  {cap.title}
+                </Text>
+              </group>
+            </Billboard>
           </group>
         )
       })}
