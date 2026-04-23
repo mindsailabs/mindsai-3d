@@ -21,6 +21,7 @@ import { Nav, NavLogo } from './components/Nav'
 import { Footer } from './components/Footer'
 import { AudioSystem } from './components/AudioSystem'
 import { OpeningFade } from './components/OpeningFade'
+import { ClosingTagline } from './components/ClosingTagline'
 import { useAppStore } from './lib/store'
 
 export default function App() {
@@ -175,6 +176,7 @@ export default function App() {
         <Act3Capabilities />
         <Act4Work />
         <Act5Contact />
+        <ClosingTagline />
         <Footer />
       </div>
 

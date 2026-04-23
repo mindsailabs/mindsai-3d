@@ -179,6 +179,13 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
     const fromAct2 = smoothstep(0.28, 0.33, sp)
     const inAct2 = toAct2 * (1 - fromAct2)
 
+    // Act 3: the M is the centre of the capability apparatus. Its expression
+    // should read as FOCUSED / COMPRESSED — reduced sway, bars slightly
+    // contracted, subtle extra teal inner glow (the mind "gathers in").
+    const toAct3 = smoothstep(0.32, 0.36, sp)
+    const fromAct3 = smoothstep(0.48, 0.52, sp)
+    const inAct3 = toAct3 * (1 - fromAct3)
+
     const toAct4 = smoothstep(0.48, 0.55, sp)
     const fromAct4 = smoothstep(0.84, 0.88, sp)
     const inAct4 = toAct4 * (1 - fromAct4)
@@ -188,12 +195,32 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
     const scaleCurve = 1 - inAct2 * 0.45 - inAct4 * 0.6 + toAct5 * 0.1
 
     const act2Pulse = inAct2 * 0.15
-    const extraSeparation = act2Pulse
+    // Act 3 contraction: bars draw slightly inward.
+    const act3Contraction = inAct3 * 0.06
+    const extraSeparation = act2Pulse - act3Contraction
     const extraY = 0
 
     const act2Scale = scaleCurve
     const act3Scale = 1
     const act4Fade = 1
+
+    // Sway dampening — Act 3 halves sway, Act 4 further reduces (M
+    // withdrawn, cards lead), Act 5 near-stills it (monument stance).
+    const swayDamp =
+      (1 - inAct3 * 0.5) * (1 - inAct4 * 0.7) * (1 - toAct5 * 0.88)
+
+    // Per-act uniform tweaks for the shader. Fresnel rim dims in Act 4
+    // (silhouette / withdrawn), brightens in Act 5 (monument glow).
+    const fresnelActBias = -inAct4 * 0.55 + toAct5 * 0.6
+    if (leftMatRef.current) {
+      // Base fresnel boost is 1.75 in the uniform initializer. Modulate
+      // additively here each frame so per-act biases apply live.
+      leftMatRef.current.uniforms.uFresnelBoost.value = 1.75 + fresnelActBias
+      // Iridescence gets a small Act 5 boost so the monument shimmers
+      // a hair more prominently.
+      leftMatRef.current.uniforms.uIridescenceStrength.value =
+        0.18 + toAct5 * 0.08
+    }
 
     // ---- Apply transformations ----
 
@@ -209,10 +236,12 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
     }
 
     if (innerRef.current) {
-      // Oscillating sway (always reads leaning-left)
-      innerRef.current.rotation.y = Math.sin(t * 0.35) * 0.55
-      innerRef.current.rotation.x = Math.sin(t * 0.22) * 0.09
-      innerRef.current.rotation.z = Math.sin(t * 0.15) * 0.03
+      // Oscillating sway. swayDamp squeezes amplitude in Acts 3/4/5 so
+      // the M's character shifts from "restless glass" in Act 1/2 to
+      // "focused" (3) → "withdrawn" (4) → "monument stillness" (5).
+      innerRef.current.rotation.y = Math.sin(t * 0.35) * 0.55 * swayDamp
+      innerRef.current.rotation.x = Math.sin(t * 0.22) * 0.09 * swayDamp
+      innerRef.current.rotation.z = Math.sin(t * 0.15) * 0.03 * swayDamp
     }
 
     if (groupRef.current) {

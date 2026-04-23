@@ -111,6 +111,13 @@ interface CardMeshProps {
 function CardMesh({ binding, isFeatured, frontness }: CardMeshProps) {
   const groupRef = useRef<THREE.Group>(null!)
 
+  // Settle-pulse — when this card becomes featured, trigger a bell-curve
+  // spike in scale + border brightness over ~450ms. Reads as a "rack-focus"
+  // / "focus-lock" beat the moment the carousel snaps to this card. Feels
+  // like a camera focus-pull to the card, not a generic slide-in.
+  const settlePulseStart = useRef<number | null>(null)
+  const settlePulseVal = useRef(0)
+
   // Play/pause via ref — does NOT reset currentTime, so a partly-buffered
   // video isn't forced to re-seek every time it becomes featured. play()
   // on an already-playing video is a no-op; on a paused one it resumes.
@@ -124,6 +131,8 @@ function CardMesh({ binding, isFeatured, frontness }: CardMeshProps) {
       if (video.ended) video.currentTime = 0
       const p = video.play()
       if (p && typeof p.catch === 'function') p.catch(() => {})
+      // Trigger the settle-pulse when this card becomes featured.
+      settlePulseStart.current = performance.now()
     } else {
       video.pause()
     }
@@ -162,8 +171,26 @@ function CardMesh({ binding, isFeatured, frontness }: CardMeshProps) {
   const cardOpacity = 0.15 + Math.pow(frontness, 2) * 0.85
 
   useFrame(() => {
+    // Settle-pulse: bell curve peaked ~200ms after becoming featured,
+    // decays to ~0 by 600ms. Shape: k * x * exp(-s * x^2).
+    if (settlePulseStart.current !== null) {
+      const dt = (performance.now() - settlePulseStart.current) / 1000
+      if (dt > 0.6) {
+        settlePulseVal.current = 0
+        settlePulseStart.current = null
+      } else {
+        settlePulseVal.current = 5.2 * dt * Math.exp(-10 * dt * dt)
+      }
+    } else if (settlePulseVal.current > 0.01) {
+      settlePulseVal.current *= 0.9
+    }
+
     if (groupRef.current) {
-      groupRef.current.scale.setScalar(cardScale)
+      const pulseScale = 1 + settlePulseVal.current * 0.06
+      groupRef.current.scale.setScalar(cardScale * pulseScale)
+    }
+    if (borderMat) {
+      borderMat.opacity = Math.min(1, 0.6 + settlePulseVal.current * 0.4)
     }
   })
 

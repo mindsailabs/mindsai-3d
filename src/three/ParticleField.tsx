@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useViewport } from '../lib/useViewport'
+import { useAppStore } from '../lib/store'
 
 /**
  * Layered ambient starfield.
@@ -21,12 +22,24 @@ const particleVertex = /* glsl */ `
   uniform float uTime;
   uniform float uPixelDensity;
   uniform float uSizeScale;
+  uniform float uAssembly;
 
   varying float vTwinkle;
   varying float vFogDepth;
+  varying float vAssemblyAlpha;
 
   void main() {
-    vec3 pos = position;
+    // uAssembly: 1 at page-open, eases to 0 over ~2s. While > 0, particles
+    // are drawn toward their per-particle "origin pull" — a position that's
+    // a blend between the global origin (0,0,0) and their natural spread.
+    // At uAssembly=0, particles sit at their natural spread position. The
+    // effect: field BURSTS outward from the M as the site opens.
+    vec3 naturalPos = position;
+    // Per-particle phase on the burst so particles don't all arrive
+    // simultaneously — phase-weighted pullback makes some arrive first.
+    float assemblyPhase = clamp(uAssembly - aPhase * 0.3, 0.0, 1.0);
+    vec3 pos = naturalPos * (1.0 - assemblyPhase);
+
     // Gentle per-particle vertical drift so the layer feels alive, not
     // mechanical. Amplitude scales with aSeed so each particle drifts
     // at its own sine offset.
@@ -37,14 +50,14 @@ const particleVertex = /* glsl */ `
     gl_Position = projectionMatrix * mvPos;
 
     // Twinkle: each particle fades in/out at a per-particle rate.
-    // The fract() + smoothstep combo gives a soft "breathe" instead of
-    // a hard blink.
     float t = fract(uTime * 0.25 + aPhase);
     vTwinkle = smoothstep(0.0, 0.3, t) * smoothstep(1.0, 0.7, t);
 
+    // During assembly, fade alpha from 0 → 1 as the particle travels
+    // outward. Per-particle phase means some fade in earlier than others.
+    vAssemblyAlpha = smoothstep(0.85, 0.0, assemblyPhase);
+
     // Size with distance attenuation so near points are bigger naturally.
-    // uSizeScale is a viewport-aware multiplier (smaller on mobile so the
-    // foreground sparks don't dominate the narrower frame).
     gl_PointSize = aSize * uPixelDensity * uSizeScale * (1.0 + vTwinkle * 0.5) *
                    (50.0 / -mvPos.z);
 
@@ -62,6 +75,7 @@ const particleFragment = /* glsl */ `
 
   varying float vTwinkle;
   varying float vFogDepth;
+  varying float vAssemblyAlpha;
 
   void main() {
     // Round sprite with smooth falloff — no hard disc edges.
@@ -69,11 +83,13 @@ const particleFragment = /* glsl */ `
     float d = length(c);
     if (d > 0.5) discard;
     float falloff = smoothstep(0.5, 0.0, d);
-    // Core is brighter than edge — gives a "bokeh bokeh" feel.
     falloff = pow(falloff, 1.4);
 
     vec3 color = uTint;
     float alpha = falloff * uOpacity * (0.45 + vTwinkle * 0.55);
+
+    // During assembly this ramps alpha 0 → full as the particle arrives.
+    alpha *= vAssemblyAlpha;
 
     // Manual fog — PointsMaterial's built-in fog can't be used because we're
     // a ShaderMaterial. Linear fog fades alpha to zero past uFogFar.
@@ -95,6 +111,8 @@ interface ParticleLayerProps {
   tintScale: number
   /** Viewport-aware multiplier for gl_PointSize. 1 on desktop, 0.45 on mobile. */
   sizeScale: number
+  /** Shared ref holding the 1 → 0 assembly value animated by the parent. */
+  assemblyRef: React.MutableRefObject<number>
 }
 
 function ParticleLayer({
@@ -107,6 +125,7 @@ function ParticleLayer({
   driftSpeed,
   tintScale,
   sizeScale,
+  assemblyRef,
 }: ParticleLayerProps) {
   const pointsRef = useRef<THREE.Points>(null!)
   const matRef = useRef<THREE.ShaderMaterial>(null!)
@@ -142,6 +161,7 @@ function ParticleLayer({
       uOpacity: { value: opacity },
       uPixelDensity: { value: Math.min(window.devicePixelRatio || 1, 2) },
       uSizeScale: { value: sizeScale },
+      uAssembly: { value: 1 },
       uFogColor: { value: new THREE.Color('#000000') },
       uFogNear: { value: 9 },
       uFogFar: { value: 26 },
@@ -153,6 +173,7 @@ function ParticleLayer({
     if (matRef.current) {
       matRef.current.uniforms.uTime.value = state.clock.elapsedTime
       matRef.current.uniforms.uSizeScale.value = sizeScale
+      matRef.current.uniforms.uAssembly.value = assemblyRef.current
     }
     if (pointsRef.current) {
       pointsRef.current.rotation.y = state.clock.elapsedTime * driftSpeed
@@ -178,10 +199,30 @@ function ParticleLayer({
 
 export function ParticleField() {
   const { isMobile } = useViewport()
-  // On mobile viewports the canvas is portrait/narrow, so particles that
-  // look subtle at 1920×1080 look like giant bokeh orbs at 375×812. Scale
-  // everything down proportionally.
+  const appReady = useAppStore((s) => s.appReady)
   const sizeScale = isMobile ? 0.45 : 1
+
+  // Assembly lifecycle: starts at 1, eases to 0 over ~2s once the opening
+  // veil lifts (appReady flips true). All four layers read the SAME ref
+  // so the burst is synchronised across depths.
+  const assemblyRef = useRef(1)
+  const assemblyStartedAt = useRef<number | null>(null)
+
+  useFrame(() => {
+    if (!appReady) {
+      assemblyRef.current = 1
+      assemblyStartedAt.current = null
+      return
+    }
+    if (assemblyStartedAt.current === null) {
+      assemblyStartedAt.current = performance.now()
+    }
+    const elapsed = (performance.now() - assemblyStartedAt.current) / 1000
+    const ASSEMBLY_DURATION = 2.2 // seconds
+    const raw = Math.max(0, 1 - elapsed / ASSEMBLY_DURATION)
+    // Cubic ease-out: fast burst, slow settle.
+    assemblyRef.current = raw * raw * raw
+  })
 
   return (
     <group>
@@ -196,6 +237,7 @@ export function ParticleField() {
         driftSpeed={0.006}
         tintScale={0.7}
         sizeScale={sizeScale}
+        assemblyRef={assemblyRef}
       />
       {/* Mid-far — the visual bulk of the starfield. */}
       <ParticleLayer
@@ -208,6 +250,7 @@ export function ParticleField() {
         driftSpeed={0.012}
         tintScale={1.3}
         sizeScale={sizeScale}
+        assemblyRef={assemblyRef}
       />
       {/* Mid-near — brighter, more twinkle, contributes to the sparkle read. */}
       <ParticleLayer
@@ -220,6 +263,7 @@ export function ParticleField() {
         driftSpeed={0.02}
         tintScale={1.9}
         sizeScale={sizeScale}
+        assemblyRef={assemblyRef}
       />
       {/* Foreground — rare large sparks close to camera, high twinkle. */}
       <ParticleLayer
@@ -232,6 +276,7 @@ export function ParticleField() {
         driftSpeed={0.034}
         tintScale={2.5}
         sizeScale={sizeScale}
+        assemblyRef={assemblyRef}
       />
     </group>
   )

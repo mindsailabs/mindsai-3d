@@ -88,6 +88,74 @@ export function CapabilityNodes() {
     []
   )
 
+  // ────────── Capability constellation beams ──────────
+  // Seven line segments connecting adjacent orbital nodes. Each segment
+  // has a time-based pulse (staggered by index) so the "system" reads as
+  // ALIVE rather than as a static wireframe. Hover any node → all seven
+  // beams brighten together briefly (handled via uniform).
+  const beamGeometry = useMemo(() => {
+    const g = new THREE.BufferGeometry()
+    const positions = new Float32Array(NODE_COUNT * 2 * 3) // start + end per segment
+    const segIndices = new Float32Array(NODE_COUNT * 2) // per-vertex seg-index
+    for (let i = 0; i < NODE_COUNT; i++) {
+      const a = baseAngles[i]
+      const b = baseAngles[(i + 1) % NODE_COUNT]
+      positions[i * 6 + 0] = Math.cos(a) * orbitRadius
+      positions[i * 6 + 1] = 0
+      positions[i * 6 + 2] = Math.sin(a) * orbitRadius
+      positions[i * 6 + 3] = Math.cos(b) * orbitRadius
+      positions[i * 6 + 4] = 0
+      positions[i * 6 + 5] = Math.sin(b) * orbitRadius
+      segIndices[i * 2 + 0] = i
+      segIndices[i * 2 + 1] = i
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    g.setAttribute('aSegIdx', new THREE.BufferAttribute(segIndices, 1))
+    return g
+  }, [baseAngles, orbitRadius])
+
+  const beamUniformsRef = useRef({
+    uTime: { value: 0 },
+    uHoverPulse: { value: 0 },
+  })
+
+  const beamMaterial = useMemo(() => {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: beamUniformsRef.current,
+      vertexShader: /* glsl */ `
+        attribute float aSegIdx;
+        varying float vSegIdx;
+        void main() {
+          vSegIdx = aSegIdx;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uHoverPulse;
+        varying float vSegIdx;
+        void main() {
+          // Each segment pulses on its own phase, staggered by index.
+          float phase = vSegIdx * 0.9;
+          float pulse = 0.5 + 0.5 * sin(uTime * 1.1 + phase);
+          pulse = pow(pulse, 2.0);
+          float alpha = 0.08 + pulse * 0.35 + uHoverPulse * 0.5;
+          // Teal — slightly brighter than the ring.
+          vec3 color = vec3(0.45, 0.77, 0.8) * (1.0 + pulse * 0.4 + uHoverPulse * 1.2);
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    ;(mat as unknown as { toneMapped: boolean }).toneMapped = false
+    return mat
+  }, [])
+
+  // Smoothed hover pulse — hovering ANY node briefly spikes it, decays back.
+  const hoverPulseRef = useRef(0)
+
   useFrame((state) => {
     const t = state.clock.elapsedTime
     const sp = progress
@@ -101,6 +169,12 @@ export function CapabilityNodes() {
       groupRef.current.scale.setScalar(act3Alpha)
       groupRef.current.visible = act3Alpha > 0.001
     }
+
+    // Animate beam uniforms. uHoverPulse = 1 while any node hovered, eases to 0.
+    const targetPulse = hoveredCapability !== null ? 1 : 0
+    hoverPulseRef.current += (targetPulse - hoverPulseRef.current) * 0.08
+    beamUniformsRef.current.uTime.value = t
+    beamUniformsRef.current.uHoverPulse.value = hoverPulseRef.current
 
     nodeRefs.current.forEach((mesh, i) => {
       if (!mesh) return
@@ -141,6 +215,13 @@ export function CapabilityNodes() {
       <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]} material={ringMaterial}>
         <torusGeometry args={[orbitRadius, 0.006, 8, 96]} />
       </mesh>
+
+      {/* Constellation beams — seven line segments connecting adjacent
+          nodes with staggered time-based pulse. Draws additively over the
+          ring so beams read as "the system is live" rather than as
+          static architecture. */}
+      <lineSegments geometry={beamGeometry} material={beamMaterial} />
+
 
       {baseAngles.map((angle, i) => {
         const x = Math.cos(angle) * orbitRadius
