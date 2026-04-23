@@ -233,7 +233,10 @@ export function WorkOrbit() {
 
   useFrame(() => {
     const sp = progress
-    const act4Alpha = smoothFade(sp, 0.49, 0.55, 0.83, 0.861)
+    // v3 — aligned with new camera timing. Push at 0.515, settled at
+    // 0.555. Carousel fades IN 0.49 → 0.555. Fade OUT 0.83 → 0.87 into
+    // Act 4→5 descent.
+    const act4Alpha = smoothFade(sp, 0.49, 0.555, 0.83, 0.87)
 
     if (groupRef.current) {
       const act4Linear = Math.max(0, Math.min(1, (sp - ACT4_START) / ACT4_SPAN))

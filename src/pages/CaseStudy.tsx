@@ -7,28 +7,22 @@ import { caseStudies } from '../lib/copy'
 import { MindsMark } from '../three/MindsMark'
 import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
+import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
 
 /**
  * /work/:id — dedicated case-study page.
  *
- * One template, six clients. Each client (northwood-atelier, helio-clinic,
- * orbit-capital, kelvin-rowe, marlow-studios, aether-labs) renders with:
+ * Composition (matches the home-page discipline):
+ *   – M at ORIGIN, scale 0.82 (same as home)
+ *   – Camera [0, 0.1, 7.5], fov 32 (same as home)
+ *   – Three orbital rings around the M — ambient teal dust, NOT narrative
+ *     content. The case study's story is told through the typography +
+ *     the portal video; the M is the brand presence behind it all.
  *
- *   – Full-bleed Veo case-study video at the top, scroll-scrubbed so it
- *     plays faster as the user moves down.
- *   – Client name + industry + service chip (big typographic hero).
- *   – Three narrative sections:
- *       1. THE BRIEF (challenge — from copy.ts)
- *       2. THE APPROACH (how we built it)
- *       3. THE RESULT (metric, oversized)
- *   – Prev / Next nav between case studies + return link.
- *
- * The M floats as a small witness in the background (scale 0.4, off-centre)
- * so the visitor never fully leaves the MindsAI universe.
- *
- * Atmospheric video + persistent nav + audio bus all inherited from the
- * shared App layout.
+ * Text discipline — hero anchored bottom-left, portal video in its own
+ * full-bleed section (the M disappears behind it), narrative blocks in
+ * narrow side-columns alternating L/R.
  */
 
 export function CaseStudy() {
@@ -48,7 +42,6 @@ export function CaseStudy() {
       ? caseStudies[caseIndex + 1]
       : null
 
-  // Must run hooks in consistent order regardless of guard branch.
   useEffect(() => {
     if ('scrollRestoration' in window.history) {
       window.history.scrollRestoration = 'manual'
@@ -58,12 +51,12 @@ export function CaseStudy() {
 
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.6,
+      duration: 0.9,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      wheelMultiplier: 0.85,
-      touchMultiplier: 1.4,
-      lerp: 0.08,
+      wheelMultiplier: 1.0,
+      touchMultiplier: 1.6,
+      lerp: 0.14,
     })
     lenis.stop()
     lenis.scrollTo(0, { immediate: true })
@@ -88,17 +81,59 @@ export function CaseStudy() {
     if (lenis && typeof lenis.start === 'function') lenis.start()
   }, [appReady])
 
-  // Unknown id → 404 route.
+  // Ambient orbital system — three rings, subtle, no scroll-emphasis.
+  // The M is the "brand" here; the story is carried by the DOM layer.
+  const orbits: Orbit[] = useMemo(
+    () => [
+      {
+        id: 'inner',
+        radius: 2.0,
+        speed: 0.11,
+        tiltAxis: 'x',
+        tilt: 0.35,
+        ringOpacity: 0.1,
+        satellites: Array.from({ length: 8 }, (_, i) => ({
+          id: `inner-${i}`,
+          size: 0.045,
+        })),
+      },
+      {
+        id: 'mid',
+        radius: 3.1,
+        speed: -0.06,
+        tiltAxis: 'x',
+        tilt: -0.15,
+        ringOpacity: 0.12,
+        satellites: Array.from({ length: 3 }, (_, i) => ({
+          id: `mid-${i}`,
+          size: 0.1,
+        })),
+      },
+      {
+        id: 'outer',
+        radius: 4.5,
+        speed: 0.035,
+        tiltAxis: 'z',
+        tilt: 0.4,
+        ringOpacity: 0.05,
+        satellites: Array.from({ length: 16 }, (_, i) => ({
+          id: `outer-${i}`,
+          size: 0.035,
+        })),
+      },
+    ],
+    []
+  )
+
   if (!study) {
     return <Navigate to="/not-found-case" replace />
   }
 
   return (
     <>
-      {/* Minimal canvas — M as witness. No orbital content. */}
       <div className="fixed inset-0 z-[1]">
         <Canvas
-          camera={{ position: [-3, 0.3, 8.5], fov: 34 }}
+          camera={{ position: [0, 0.1, 7.5], fov: 32 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -108,11 +143,12 @@ export function CaseStudy() {
           }}
           dpr={[1, 3]}
         >
-          <fog attach="fog" args={['#000000', 10, 26]} />
+          <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
-            <WitnessCamera />
+            <CaseStudyCamera />
             <ParticleField />
-            <MindsMark scale={0.4} onDotMount={setDotMesh} />
+            <MindsMark scale={0.82} onDotMount={setDotMesh} />
+            <OrbitalStage orbits={orbits} />
             <PostProcess sunMesh={dotMesh} />
           </Suspense>
         </Canvas>
@@ -125,12 +161,14 @@ export function CaseStudy() {
           transition: 'opacity 600ms cubic-bezier(0.22, 1, 0.36, 1) 200ms',
         }}
       >
-        {/* 01 — HERO */}
-        <section className="min-h-screen flex flex-col justify-end px-6 md:px-12 lg:px-20 pb-[14vh] pt-[16vh]">
-          <div className="max-w-[1200px] mx-auto w-full">
+        {/* 01 — HERO. Title anchored bottom-left. M visible behind in the
+            upper/right portion. */}
+        <section className="min-h-screen flex flex-col justify-end px-6 md:px-12 lg:px-20 pb-[12vh] pt-[18vh]">
+          <div className="max-w-[780px]">
             <div className="flex items-baseline gap-4 mb-6">
               <span className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.3em] font-medium tabular-nums">
-                {String(caseIndex + 1).padStart(2, '0')} / {String(caseStudies.length).padStart(2, '0')}
+                {String(caseIndex + 1).padStart(2, '0')} /{' '}
+                {String(caseStudies.length).padStart(2, '0')}
               </span>
               <span className="h-px w-10 bg-brand-teal/40" />
               <span className="text-text-secondary text-[10px] md:text-[11px] uppercase tracking-[0.3em]">
@@ -146,52 +184,101 @@ export function CaseStudy() {
           </div>
         </section>
 
-        {/* 02 — FULL-BLEED VIDEO */}
-        <section className="relative min-h-[90vh] flex items-center justify-center px-4 md:px-10">
-          <div
-            className="relative w-full max-w-[1400px] aspect-[16/9] rounded-[4px] overflow-hidden border border-white/10"
-            style={{
-              boxShadow:
-                '0 60px 120px -30px rgba(0, 0, 0, 0.9),' +
-                '0 0 0 1px rgba(115, 197, 204, 0.08) inset,' +
-                '0 0 120px -20px rgba(115, 197, 204, 0.12)',
-            }}
-          >
-            <video
-              src={study.videoPath}
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              className="absolute inset-0 w-full h-full object-cover"
+        {/* 02 — PORTAL. Video takes the full centre; the M disappears
+            behind it for the length of this section and returns when
+            you scroll past. */}
+        <section className="relative min-h-[95vh] flex items-center justify-center px-4 md:px-10">
+          <div className="relative w-full max-w-[1400px] aspect-[16/9]">
+            <div
+              className="absolute -inset-16 pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(ellipse at center, rgba(115,197,204,0.18) 0%, rgba(115,197,204,0.05) 40%, rgba(0,0,0,0) 70%)',
+                filter: 'blur(30px)',
+              }}
             />
+            <div
+              className="relative w-full h-full rounded-[4px] overflow-hidden border border-white/10"
+              style={{
+                boxShadow:
+                  '0 80px 160px -40px rgba(0, 0, 0, 0.95),' +
+                  '0 0 0 1px rgba(115, 197, 204, 0.12) inset,' +
+                  '0 0 140px -20px rgba(115, 197, 204, 0.22)',
+              }}
+            >
+              <video
+                src={study.videoPath}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(115,197,204,0.06) 92%, rgba(0,0,0,0.25) 100%)',
+                }}
+              />
+            </div>
+            <div className="pointer-events-none absolute inset-0">
+              {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
+                <div
+                  key={corner}
+                  className="absolute w-6 h-6 md:w-8 md:h-8"
+                  style={{
+                    top: corner.startsWith('t') ? -6 : undefined,
+                    bottom: corner.startsWith('b') ? -6 : undefined,
+                    left: corner.endsWith('l') ? -6 : undefined,
+                    right: corner.endsWith('r') ? -6 : undefined,
+                    borderTop: corner.startsWith('t')
+                      ? '1px solid rgba(115,197,204,0.6)'
+                      : 'none',
+                    borderBottom: corner.startsWith('b')
+                      ? '1px solid rgba(115,197,204,0.6)'
+                      : 'none',
+                    borderLeft: corner.endsWith('l')
+                      ? '1px solid rgba(115,197,204,0.6)'
+                      : 'none',
+                    borderRight: corner.endsWith('r')
+                      ? '1px solid rgba(115,197,204,0.6)'
+                      : 'none',
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </section>
 
-        {/* 03 — BRIEF */}
-        <NarrativeBlock eyebrow="01 — The brief" body={study.copy.challenge} align="left" />
+        {/* 03 — BRIEF (left column) */}
+        <NarrativeBlock
+          eyebrow="01 — The brief"
+          body={study.copy.challenge}
+          align="left"
+        />
 
-        {/* 04 — APPROACH */}
+        {/* 04 — APPROACH (right column) */}
         <NarrativeBlock
           eyebrow="02 — The approach"
           body={study.copy.approach}
           align="right"
         />
 
-        {/* 05 — RESULT (big metric) */}
-        <section className="min-h-[80vh] flex items-center justify-center px-6 md:px-12">
-          <div className="max-w-[1100px] w-full text-center">
+        {/* 05 — RESULT. Bottom-left anchored so M stays upper-right. */}
+        <section className="min-h-[80vh] flex items-end px-6 md:px-12 lg:px-20 pb-[12vh]">
+          <div className="max-w-[780px]">
             <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-8">
               03 — The result
             </div>
-            <h2 className="text-text-primary font-black text-[clamp(2.25rem,7vw,7rem)] leading-[0.9] tracking-tight md:tracking-tightest">
+            <h2 className="text-text-primary font-black text-[clamp(2.25rem,7vw,6.5rem)] leading-[0.9] tracking-tight md:tracking-tightest">
               {study.metric}
             </h2>
           </div>
         </section>
 
-        {/* 06 — PREV / NEXT + RETURN */}
+        {/* 06 — PREV / NEXT */}
         <section className="px-6 md:px-12 lg:px-20 py-[10vh]">
           <div className="max-w-[1200px] mx-auto w-full">
             <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 md:gap-4">
@@ -214,14 +301,12 @@ export function CaseStudy() {
                   </div>
                 )}
               </div>
-
               <Link
                 to="/#work"
                 className="text-brand-teal text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border-b border-brand-teal/30 hover:border-brand-teal pb-1 transition-colors self-center"
               >
                 All work
               </Link>
-
               <div className="flex-1 text-right">
                 {next ? (
                   <Link
@@ -249,6 +334,10 @@ export function CaseStudy() {
   )
 }
 
+/**
+ * Narrative block — narrow side-column (max ~40vw) alternating L/R.
+ * Centre of the viewport stays open for the M + orbital rings.
+ */
 function NarrativeBlock({
   eyebrow,
   body,
@@ -264,7 +353,8 @@ function NarrativeBlock({
   useEffect(() => {
     if (!ref) return
     const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => e.isIntersecting && setVisible(true)),
+      (entries) =>
+        entries.forEach((e) => e.isIntersecting && setVisible(true)),
       { threshold: 0.3 }
     )
     io.observe(ref)
@@ -274,11 +364,11 @@ function NarrativeBlock({
   return (
     <section
       ref={setRef}
-      className="min-h-[70vh] flex items-center justify-center px-6 md:px-12 lg:px-20"
+      className="min-h-[70vh] flex items-center px-6 md:px-12 lg:px-20"
     >
       <div
         className={
-          'max-w-[980px] w-full ' +
+          'max-w-[440px] lg:max-w-[520px] w-full ' +
           (align === 'right' ? 'ml-auto text-right' : 'mr-auto')
         }
         style={{
@@ -294,7 +384,7 @@ function NarrativeBlock({
         <div className="text-brand-teal text-[9px] md:text-[10px] uppercase tracking-[0.4em] font-medium mb-6 md:mb-8">
           {eyebrow}
         </div>
-        <p className="text-text-primary font-medium text-[clamp(1.125rem,2.4vw,2rem)] leading-[1.3] tracking-tight">
+        <p className="text-text-primary font-medium text-[clamp(1.125rem,2.2vw,1.75rem)] leading-[1.3] tracking-tight">
           {body}
         </p>
       </div>
@@ -303,10 +393,10 @@ function NarrativeBlock({
 }
 
 /**
- * Slow cinematic drift camera — the M floats as a background witness.
- * No scroll-tied keyframes (the content is the story, not the camera).
+ * Case-study camera — slow orbit around the M so the orbital rings read
+ * as real rings in space. No scroll-dolly; the narrative is the DOM.
  */
-function WitnessCamera() {
+function CaseStudyCamera() {
   const mouse = useRef({ x: 0, y: 0 })
   const mouseSmoothed = useRef({ x: 0, y: 0 })
 
@@ -325,11 +415,15 @@ function WitnessCamera() {
       (mouse.current.x - mouseSmoothed.current.x) * 0.04
     mouseSmoothed.current.y +=
       (mouse.current.y - mouseSmoothed.current.y) * 0.04
+
+    const yaw = Math.sin(t * 0.06) * 0.12 + mouseSmoothed.current.x * 0.15
+    const orbitRadius = 7.5
     const cam = state.camera
-    cam.position.x = -3 + Math.sin(t * 0.1) * 0.15 + mouseSmoothed.current.x * 0.4
-    cam.position.y = 0.3 + Math.cos(t * 0.08) * 0.1 + mouseSmoothed.current.y * 0.25
-    cam.position.z = 8.5 + Math.sin(t * 0.06) * 0.15
-    cam.lookAt(-0.5 + mouseSmoothed.current.x * 0.1, 0, 0)
+    cam.position.x = Math.sin(yaw) * orbitRadius
+    cam.position.y =
+      0.2 + Math.cos(t * 0.05) * 0.08 + mouseSmoothed.current.y * 0.25
+    cam.position.z = Math.cos(yaw) * orbitRadius
+    cam.lookAt(0, mouseSmoothed.current.y * 0.04, 0)
   })
 
   return null

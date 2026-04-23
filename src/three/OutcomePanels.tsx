@@ -196,7 +196,11 @@ export function OutcomePanels() {
 
   useFrame(() => {
     const sp = progress
-    const act2Alpha = smoothFade(sp, 0.11, 0.17, 0.29, 0.316)
+    // v3 — aligned with new camera push/settle timing.
+    // Push at 0.12, settled at 0.16. Panels fade IN 0.095→0.16 so by
+    // the time camera settles they're fully visible. Fade OUT 0.29→0.325
+    // timed to the Act 2→3 push.
+    const act2Alpha = smoothFade(sp, 0.095, 0.16, 0.29, 0.325)
 
     if (groupRef.current) {
       // SNAP-SCROLL: divide Act 2 (0.127-0.316) into 4 slots — one per outcome.
@@ -316,13 +320,13 @@ function AnglingPanel({
 
   useFrame(() => {
     // ─── Emergence animation ──────────────────────────────────────────
-    // Each panel has its own tiny scroll window. Panel 0 emerges first,
-    // panel 3 last. Stagger = 0.012 scroll units between panels; each
-    // takes ~0.04 scroll units to fully emerge. Total window =
-    // 0.127 (Act 2 start) → 0.127 + 3·0.012 + 0.04 = 0.203 (~40% into
-    // Act 2). After that it's full orbit as before.
-    const emergeStart = 0.127 + index * 0.012
-    const emergeEnd = emergeStart + 0.05
+    // v3 — emergeStart aligned with push 0.12 so panels materialise
+    // DURING the flare. Panel 0: 0.10 → 0.16, Panel 3: 0.136 → 0.196.
+    // By the time camera settles at 0.16, panel 0 is fully emerged,
+    // panels 1-3 are still materialising, which reads as "they're still
+    // arriving" and hides any abrupt camera transition.
+    const emergeStart = 0.10 + index * 0.012
+    const emergeEnd = emergeStart + 0.06
     const rawEmerge = Math.max(
       0,
       Math.min(1, (progress - emergeStart) / (emergeEnd - emergeStart))

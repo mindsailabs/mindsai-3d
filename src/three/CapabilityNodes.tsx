@@ -7,29 +7,55 @@ import { useAppStore } from '../lib/store'
 import { useViewport } from '../lib/useViewport'
 
 /**
- * Seven capability nodes orbiting the M during Act 3.
+ * Seven capability planets orbiting the M (the "sun") during Act 3.
  *
- * v2 — SDF text labels (drei `<Text>`, backed by troika-three-text) replace
- * the prior `<Html>` overlays. Benefits:
- *   – Labels are rendered IN the WebGL scene so they z-sort naturally with
- *     the M and the orbit ring. No more HTML-over-canvas overlap.
- *   – No CSS transform subpixel blur at intermediate distances — SDF stays
- *     crisp at any scale.
- *   – Labels follow the orbit rotation automatically; no per-frame opacity
- *     math to hide back-side labels (occlusion is handled by the depth
- *     buffer against the M).
+ * v3 — planets, not a constellation.
+ *
+ * Earlier versions had all seven nodes on a SINGLE shared ring with
+ * glowing tubes connecting adjacent nodes. That read as a wired network,
+ * not an orbital system. Planets are not linked to each other — they
+ * share a star.
+ *
+ * v3 gives each capability its OWN orbit: independent radius, tilt,
+ * speed, and phase. No beams. The M is the gravitational centre, the
+ * seven planets move independently around it.
+ *
+ * Hover behaviour:
+ *   – When you hover a planet, ALL orbital motion pauses.
+ *   – The hovered planet scales up 2.2× and reveals a full card
+ *     (code · title · description · index) beside it.
+ *   – Other planets dim.
+ *   – Release hover, motion resumes from the same angles (no snap back).
  */
 
-const NODE_COUNT = capabilities.length // 7
-const ORBIT_RADIUS_DESKTOP = 2.6
-// Mobile: tighter orbit so the ring fits within the portrait viewport AND
-// so labels at the 3 o'clock / 9 o'clock positions don't extend past the
-// frame edge. Calibrated against a 375-wide viewport with the wider mobile
-// FOV (38°) from CameraRig.
-// Mobile orbit stays tight but no longer has to accommodate full titles
-// (those live in a legend at the bottom of the viewport — see Act3Capabilities).
-const ORBIT_RADIUS_MOBILE = 1.7
-const ORBIT_TILT_X = 0.22
+interface PlanetOrbit {
+  radius: number
+  speed: number // rad/sec
+  phase: number // initial angle, rad
+  tiltX: number
+  tiltZ: number
+  yBob: number // amplitude of vertical bob along orbit
+  bobFreqMul: number // how many times per full orbit it bobs
+}
+
+// Each capability gets its own orbit. Radii staggered from 1.95 to 3.6
+// (staggered NOT linear — gives an asteroid-belt feel rather than
+// concentric rings). Speeds and tilts picked to feel "natural" — no
+// resonances so planets never align for long.
+const PLANET_ORBITS_DESKTOP: PlanetOrbit[] = [
+  { radius: 2.0, speed: 0.14, phase: 0.0, tiltX: 0.18, tiltZ: 0.05, yBob: 0.12, bobFreqMul: 1 },
+  { radius: 2.4, speed: -0.11, phase: 1.1, tiltX: 0.32, tiltZ: -0.08, yBob: 0.18, bobFreqMul: 1 },
+  { radius: 2.75, speed: 0.095, phase: 2.3, tiltX: -0.12, tiltZ: 0.16, yBob: 0.1, bobFreqMul: 2 },
+  { radius: 3.1, speed: -0.08, phase: 3.6, tiltX: 0.24, tiltZ: -0.12, yBob: 0.14, bobFreqMul: 1 },
+  { radius: 3.35, speed: 0.075, phase: 4.8, tiltX: -0.28, tiltZ: 0.08, yBob: 0.16, bobFreqMul: 2 },
+  { radius: 3.6, speed: -0.065, phase: 5.6, tiltX: 0.38, tiltZ: -0.04, yBob: 0.09, bobFreqMul: 1 },
+  { radius: 3.85, speed: 0.055, phase: 6.5, tiltX: -0.2, tiltZ: 0.14, yBob: 0.12, bobFreqMul: 3 },
+]
+
+// Mobile: tighter radii so the whole system fits in portrait.
+const PLANET_ORBITS_MOBILE: PlanetOrbit[] = PLANET_ORBITS_DESKTOP.map(
+  (o) => ({ ...o, radius: o.radius * 0.62 })
+)
 
 export function CapabilityNodes() {
   const progress = useAppStore((s) => s.scrollProgress)
@@ -37,253 +63,289 @@ export function CapabilityNodes() {
   const setHoveredCapability = useAppStore((s) => s.setHoveredCapability)
   const { isMobile } = useViewport()
 
-  // SDF text size in world units scales down on mobile — the camera is
-  // closer in relative terms and the aspect is narrower, so the same
-  // fontSize reads as giant clipping text.
-  const labelCodeSize = isMobile ? 0.04 : 0.09
-  const labelTitleSize = isMobile ? 0.055 : 0.15
-  const labelYOffset = isMobile ? 0.2 : 0.36
-  const orbitRadius = isMobile ? ORBIT_RADIUS_MOBILE : ORBIT_RADIUS_DESKTOP
-  // maxWidth 0.85 on mobile forces ALL titles (even "Workflows & Automation
-  // Systems") onto 2-3 lines inside the viewport. Compact layout >
-  // spilling edges.
-  const labelMaxWidth = isMobile ? 0.85 : 4.0
-
   const groupRef = useRef<THREE.Group>(null!)
-  const ringRef = useRef<THREE.Mesh>(null!)
-  const nodeRefs = useRef<(THREE.Mesh | null)[]>([])
-  // refs to each label's parent group so we can opacity-modulate based on
-  // front-ness (subtle, not hiding — just softening back labels).
-  const labelGroupRefs = useRef<(THREE.Group | null)[]>([])
-
-  const nodeMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#73C5CC').multiplyScalar(2.6),
-    })
-    mat.toneMapped = false
-    return mat
-  }, [])
-
-  const hoveredNodeMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#73C5CC').multiplyScalar(6.0),
-    })
-    mat.toneMapped = false
-    return mat
-  }, [])
-
-  const ringMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#73C5CC').multiplyScalar(0.55),
-      transparent: true,
-      opacity: 0.35,
-      side: THREE.DoubleSide,
-    })
-    mat.toneMapped = false
-    return mat
-  }, [])
-
-  const baseAngles = useMemo(
-    () => Array.from({ length: NODE_COUNT }, (_, i) => (i / NODE_COUNT) * Math.PI * 2),
-    []
-  )
-
-  // ────────── Capability constellation beams ──────────
-  // Seven line segments connecting adjacent orbital nodes. Each segment
-  // has a time-based pulse (staggered by index) so the "system" reads as
-  // ALIVE rather than as a static wireframe. Hover any node → all seven
-  // beams brighten together briefly (handled via uniform).
-  const beamGeometry = useMemo(() => {
-    const g = new THREE.BufferGeometry()
-    const positions = new Float32Array(NODE_COUNT * 2 * 3) // start + end per segment
-    const segIndices = new Float32Array(NODE_COUNT * 2) // per-vertex seg-index
-    for (let i = 0; i < NODE_COUNT; i++) {
-      const a = baseAngles[i]
-      const b = baseAngles[(i + 1) % NODE_COUNT]
-      positions[i * 6 + 0] = Math.cos(a) * orbitRadius
-      positions[i * 6 + 1] = 0
-      positions[i * 6 + 2] = Math.sin(a) * orbitRadius
-      positions[i * 6 + 3] = Math.cos(b) * orbitRadius
-      positions[i * 6 + 4] = 0
-      positions[i * 6 + 5] = Math.sin(b) * orbitRadius
-      segIndices[i * 2 + 0] = i
-      segIndices[i * 2 + 1] = i
-    }
-    g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    g.setAttribute('aSegIdx', new THREE.BufferAttribute(segIndices, 1))
-    return g
-  }, [baseAngles, orbitRadius])
-
-  const beamUniformsRef = useRef({
-    uTime: { value: 0 },
-    uHoverPulse: { value: 0 },
-  })
-
-  const beamMaterial = useMemo(() => {
-    const mat = new THREE.ShaderMaterial({
-      uniforms: beamUniformsRef.current,
-      vertexShader: /* glsl */ `
-        attribute float aSegIdx;
-        varying float vSegIdx;
-        void main() {
-          vSegIdx = aSegIdx;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        uniform float uTime;
-        uniform float uHoverPulse;
-        varying float vSegIdx;
-        void main() {
-          // Each segment pulses on its own phase, staggered by index.
-          float phase = vSegIdx * 0.9;
-          float pulse = 0.5 + 0.5 * sin(uTime * 1.1 + phase);
-          pulse = pow(pulse, 2.0);
-          float alpha = 0.08 + pulse * 0.35 + uHoverPulse * 0.5;
-          // Teal — slightly brighter than the ring.
-          vec3 color = vec3(0.45, 0.77, 0.8) * (1.0 + pulse * 0.4 + uHoverPulse * 1.2);
-          gl_FragColor = vec4(color, alpha);
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    })
-    ;(mat as unknown as { toneMapped: boolean }).toneMapped = false
-    return mat
-  }, [])
-
-  // Smoothed hover pulse — hovering ANY node briefly spikes it, decays back.
-  const hoverPulseRef = useRef(0)
+  const PLANET_ORBITS = isMobile ? PLANET_ORBITS_MOBILE : PLANET_ORBITS_DESKTOP
 
   useFrame((state) => {
-    const t = state.clock.elapsedTime
     const sp = progress
-
-    const act3Alpha = smoothFade(sp, 0.30, 0.35, 0.47, 0.506)
+    // v5 — aligned with new camera timing. Push at 0.325, settled at
+    // 0.365, hold ends 0.48, push to Act 4 at 0.515. Planets fade
+    // IN 0.30 → 0.365 (during and through the flare, fully visible at
+    // camera settled). Fade OUT 0.49 → 0.515 into Act 3→4 push.
+    const act3Alpha = smoothFade(sp, 0.30, 0.365, 0.49, 0.515)
 
     if (groupRef.current) {
-      const scrollRotation = (sp - 0.316) * 5.5
-      groupRef.current.rotation.y = scrollRotation + t * 0.05
-      groupRef.current.rotation.x = ORBIT_TILT_X
+      // Scroll rotates the whole system slowly. Starts at the settled
+      // frame (0.365), so the system arrives at a stable orientation.
+      // Time drift paused on hover.
+      const scrollRotation = Math.max(0, sp - 0.365) * 2.0
+      const anyHovered = hoveredCapability !== null
+      const idleDrift = anyHovered ? 0 : state.clock.elapsedTime * 0.02
+      groupRef.current.rotation.y = scrollRotation + idleDrift
       groupRef.current.scale.setScalar(act3Alpha)
       groupRef.current.visible = act3Alpha > 0.001
     }
-
-    // Animate beam uniforms. uHoverPulse = 1 while any node hovered, eases to 0.
-    const targetPulse = hoveredCapability !== null ? 1 : 0
-    hoverPulseRef.current += (targetPulse - hoverPulseRef.current) * 0.08
-    beamUniformsRef.current.uTime.value = t
-    beamUniformsRef.current.uHoverPulse.value = hoverPulseRef.current
-
-    nodeRefs.current.forEach((mesh, i) => {
-      if (!mesh) return
-      const isHovered = hoveredCapability === i
-      const basePulse = 1 + Math.sin(t * 1.5 + i * 0.6) * 0.15
-      const hoverBoost = isHovered ? 1.9 : 1.0
-      mesh.scale.setScalar(basePulse * hoverBoost)
-      mesh.material = isHovered ? hoveredNodeMaterial : nodeMaterial
-
-      // Label groups fade subtly by world z — front labels at ~1.0 opacity,
-      // back labels at ~0.2. SDF text z-sorts against the M naturally, but
-      // this smooths the feeling further (a back label is *also* faded
-      // mid-air, not just behind the M).
-      const worldPos = new THREE.Vector3()
-      mesh.getWorldPosition(worldPos)
-      const frontBias = Math.max(
-        0,
-        Math.min(1, (worldPos.z + orbitRadius) / (2 * orbitRadius))
-      )
-      const labelGroup = labelGroupRefs.current[i]
-      if (labelGroup) {
-        const targetOpacity = 0.2 + Math.pow(frontBias, 2.2) * 0.8
-        labelGroup.traverse((obj) => {
-          const mat = (obj as unknown as { material?: THREE.Material })
-            .material
-          if (mat && 'opacity' in mat) {
-            ;(mat as THREE.Material & { opacity: number }).opacity =
-              targetOpacity
-          }
-        })
-      }
-    })
   })
 
   return (
     <group ref={groupRef} position={[0, 0.1, 0]}>
-      {/* Orbit ring */}
-      <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]} material={ringMaterial}>
-        <torusGeometry args={[orbitRadius, 0.006, 8, 96]} />
+      {capabilities.map((cap, i) => (
+        <CapabilityPlanet
+          key={cap.id}
+          capability={cap}
+          index={i}
+          orbit={PLANET_ORBITS[i]}
+          hoveredIndex={hoveredCapability}
+          onHover={setHoveredCapability}
+          isMobile={isMobile}
+        />
+      ))}
+    </group>
+  )
+}
+
+/**
+ * CapabilityPlanet — one capability, one orbit. Advances its orbital
+ * angle every frame unless any planet is hovered (then it freezes in
+ * place so users can read the expanded card).
+ */
+function CapabilityPlanet({
+  capability,
+  index,
+  orbit,
+  hoveredIndex,
+  onHover,
+  isMobile,
+}: {
+  capability: (typeof capabilities)[number]
+  index: number
+  orbit: PlanetOrbit
+  hoveredIndex: number | null
+  onHover: (i: number | null) => void
+  isMobile: boolean
+}) {
+  const planetRef = useRef<THREE.Group>(null!)
+  const nodeRef = useRef<THREE.Mesh>(null!)
+  const glowRef = useRef<THREE.Mesh>(null!)
+  const cardRef = useRef<THREE.Group>(null!)
+  const angleRef = useRef(orbit.phase)
+
+  const isHovered = hoveredIndex === index
+  const anyHovered = hoveredIndex !== null
+  const isDimmed = anyHovered && !isHovered
+
+  const nodeMaterial = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#73C5CC').multiplyScalar(2.6),
+    })
+    m.toneMapped = false
+    return m
+  }, [])
+
+  const glowMaterial = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#73C5CC').multiplyScalar(1.2),
+      transparent: true,
+      opacity: 0.35,
+    })
+    m.toneMapped = false
+    return m
+  }, [])
+
+  useFrame((state, delta) => {
+    // Advance orbit unless something is hovered.
+    if (!anyHovered) {
+      angleRef.current += delta * orbit.speed
+    }
+
+    // Compute planet position from current angle, then apply tilt.
+    const a = angleRef.current
+    let px = Math.cos(a) * orbit.radius
+    let py =
+      Math.sin(a * orbit.bobFreqMul + orbit.phase * 0.7) * orbit.yBob
+    let pz = Math.sin(a) * orbit.radius
+
+    // Apply orbit-plane tilt (rotate around X then Z).
+    const cosX = Math.cos(orbit.tiltX)
+    const sinX = Math.sin(orbit.tiltX)
+    const ty = py * cosX - pz * sinX
+    const tz = py * sinX + pz * cosX
+    py = ty
+    pz = tz
+    const cosZ = Math.cos(orbit.tiltZ)
+    const sinZ = Math.sin(orbit.tiltZ)
+    const tx = px * cosZ - py * sinZ
+    const ty2 = px * sinZ + py * cosZ
+    px = tx
+    py = ty2
+
+    if (planetRef.current) {
+      planetRef.current.position.set(px, py, pz)
+    }
+
+    // Scale / dim lerp.
+    const targetScale = isHovered ? 2.2 : isDimmed ? 0.7 : 1.0
+    const current = nodeRef.current
+    if (current) {
+      const pulse =
+        1 + Math.sin(state.clock.elapsedTime * 1.4 + index * 0.7) * 0.12
+      const s = current.scale.x
+      const newS = s + (targetScale * pulse - s) * 0.12
+      current.scale.setScalar(newS)
+
+      // Brightness ramp on hover (colour via material uniforms).
+      const mat = current.material as THREE.MeshBasicMaterial
+      const boost = isHovered ? 5.5 : isDimmed ? 1.2 : 2.6
+      mat.color = new THREE.Color('#73C5CC').multiplyScalar(boost)
+    }
+
+    // Glow halo (wider sphere behind the node).
+    if (glowRef.current) {
+      const gTarget = isHovered ? 3.4 : isDimmed ? 0.5 : 1.4
+      const cur = glowRef.current.scale.x
+      const next = cur + (gTarget - cur) * 0.1
+      glowRef.current.scale.setScalar(next)
+      ;(glowRef.current.material as THREE.MeshBasicMaterial).opacity =
+        isHovered ? 0.55 : isDimmed ? 0.08 : 0.28
+    }
+
+    // Card fade-in on hover.
+    if (cardRef.current) {
+      const target = isHovered ? 1 : 0
+      cardRef.current.traverse((obj) => {
+        const mat = (obj as unknown as { material?: THREE.Material })
+          .material
+        if (mat && 'opacity' in mat) {
+          const m = mat as THREE.Material & { opacity: number }
+          m.opacity = m.opacity + (target - m.opacity) * 0.16
+        }
+      })
+    }
+  })
+
+  // Card positions to the RIGHT of the planet on even indices, LEFT on
+  // odd — so cards don't all collide in the same region of the scene.
+  const cardOnRight = index % 2 === 0
+  const cardOffsetX = cardOnRight ? 0.55 : -0.55
+
+  return (
+    <group ref={planetRef}>
+      {/* Glow halo */}
+      <mesh ref={glowRef} material={glowMaterial}>
+        <sphereGeometry args={[0.14, 20, 20]} />
+      </mesh>
+      {/* Core planet */}
+      <mesh
+        ref={nodeRef}
+        material={nodeMaterial}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          onHover(index)
+          document.body.style.cursor = 'pointer'
+        }}
+        onPointerOut={() => {
+          onHover(null)
+          document.body.style.cursor = 'default'
+        }}
+      >
+        <sphereGeometry args={[0.09, 24, 24]} />
       </mesh>
 
-      {/* Constellation beams — seven line segments connecting adjacent
-          nodes with staggered time-based pulse. Draws additively over the
-          ring so beams read as "the system is live" rather than as
-          static architecture. */}
-      <lineSegments geometry={beamGeometry} material={beamMaterial} />
-
-
-      {baseAngles.map((angle, i) => {
-        const x = Math.cos(angle) * orbitRadius
-        const z = Math.sin(angle) * orbitRadius
-        const cap = capabilities[i]
-        return (
-          <group key={cap.id} position={[x, 0, z]}>
-            <mesh
-              ref={(m) => {
-                nodeRefs.current[i] = m
-              }}
-              material={nodeMaterial}
-              onPointerOver={() => setHoveredCapability(i)}
-              onPointerOut={() => setHoveredCapability(null)}
+      {/* Always-visible planet label — code + short title stacked so
+          users can read WHICH capability this planet is without having
+          to hover. Upsized 0.085 → 0.14 and opacity raised to 1.0 so
+          the label reads clearly through the fog / bloom / particles. */}
+      <Billboard follow position={[0, isMobile ? 0.22 : 0.3, 0]}>
+        <group>
+          <Text
+            fontSize={isMobile ? 0.065 : 0.12}
+            color="#73C5CC"
+            anchorX="center"
+            anchorY="bottom"
+            position={[0, 0.03, 0]}
+            letterSpacing={0.3}
+            outlineWidth={0.004}
+            outlineColor="#000000"
+            outlineOpacity={0.55}
+            material-toneMapped={false}
+            material-transparent={true}
+            material-opacity={isDimmed ? 0.35 : isHovered ? 0 : 1.0}
+          >
+            {capability.code}
+          </Text>
+          {!isMobile && (
+            <Text
+              fontSize={0.075}
+              color="#FFFFFF"
+              anchorX="center"
+              anchorY="top"
+              position={[0, -0.03, 0]}
+              letterSpacing={0.02}
+              maxWidth={2.2}
+              textAlign="center"
+              outlineWidth={0.003}
+              outlineColor="#000000"
+              outlineOpacity={0.6}
+              material-toneMapped={false}
+              material-transparent={true}
+              material-opacity={isDimmed ? 0.3 : isHovered ? 0 : 0.92}
             >
-              <sphereGeometry args={[0.1, 32, 32]} />
-            </mesh>
-            {/* SDF label group. Desktop: full code + title. Mobile: just
-                the M-code — full titles live in a viewport-anchored legend
-                (see Act3Capabilities.tsx) so the 3D orbit stays composed
-                inside the portrait frame. */}
-            <Billboard follow={true} position={[0, labelYOffset, 0]}>
-              <group
-                ref={(g) => {
-                  labelGroupRefs.current[i] = g
-                }}
-              >
-                <Text
-                  fontSize={labelCodeSize}
-                  color="#73C5CC"
-                  anchorX="center"
-                  anchorY="bottom"
-                  position={[0, 0.02, 0]}
-                  letterSpacing={0.25}
-                  outlineWidth={0}
-                  material-toneMapped={false}
-                  material-transparent={true}
-                >
-                  {cap.code}
-                </Text>
-                {!isMobile && (
-                  <Text
-                    fontSize={labelTitleSize}
-                    color="#FFFFFF"
-                    anchorX="center"
-                    anchorY="top"
-                    position={[0, -0.04, 0]}
-                    fontWeight={500}
-                    maxWidth={labelMaxWidth}
-                    textAlign="center"
-                    outlineWidth={0}
-                    material-toneMapped={false}
-                    material-transparent={true}
-                  >
-                    {cap.title}
-                  </Text>
-                )}
-              </group>
-            </Billboard>
-          </group>
-        )
-      })}
+              {capability.title}
+            </Text>
+          )}
+        </group>
+      </Billboard>
+
+      {/* Expanded card — only animates in on hover */}
+      <Billboard follow position={[cardOffsetX, 0, 0]}>
+        <group ref={cardRef}>
+          <Text
+            fontSize={0.08}
+            color="#73C5CC"
+            anchorX={cardOnRight ? 'left' : 'right'}
+            anchorY="bottom"
+            position={[0, 0.24, 0]}
+            letterSpacing={0.3}
+            outlineWidth={0}
+            material-toneMapped={false}
+            material-transparent={true}
+            material-opacity={0}
+          >
+            {capability.code} · {String(index + 1).padStart(2, '0')}/07
+          </Text>
+          <Text
+            fontSize={isMobile ? 0.16 : 0.22}
+            color="#FFFFFF"
+            anchorX={cardOnRight ? 'left' : 'right'}
+            anchorY="top"
+            position={[0, 0.16, 0]}
+            fontWeight={700}
+            maxWidth={isMobile ? 1.6 : 2.6}
+            textAlign={cardOnRight ? 'left' : 'right'}
+            outlineWidth={0}
+            material-toneMapped={false}
+            material-transparent={true}
+            material-opacity={0}
+          >
+            {capability.title}
+          </Text>
+          <Text
+            fontSize={0.075}
+            color="#B8C0C0"
+            anchorX={cardOnRight ? 'left' : 'right'}
+            anchorY="top"
+            position={[0, -0.35, 0]}
+            maxWidth={isMobile ? 1.6 : 2.6}
+            textAlign={cardOnRight ? 'left' : 'right'}
+            outlineWidth={0}
+            material-toneMapped={false}
+            material-transparent={true}
+            material-opacity={0}
+          >
+            {capability.description}
+          </Text>
+        </group>
+      </Billboard>
     </group>
   )
 }

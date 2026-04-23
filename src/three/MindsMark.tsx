@@ -31,12 +31,13 @@ const LEAN_RADIANS = THREE.MathUtils.degToRad(16)
 const BAR_SEPARATION = 0.66
 
 // Dot matches the official MindsAI logo mark: a solid teal circle positioned
-// OUTSIDE-LEFT of the M, at roughly 65% down the bar height. Sits OUTSIDE the
-// swaying innerRef so it stays anchored as the bars tumble above it.
-// (Reference: /reference/logo/mindsai_icon_512.png — dot is ~45% of bar width,
-// center offset slightly left and below-centre of the left bar.)
-const DOT_POSITION: [number, number, number] = [-0.88, -0.5, 0]
-const DOT_RADIUS = 0.22
+// OUTSIDE-LEFT of the M, roughly 84% down the bar height (near the bottom).
+// Sits OUTSIDE the swaying innerRef so it stays anchored as the bars tumble
+// above it. Measured from reference/logo/mindsai_icon_512.png — the dot is
+// ~45% of bar width in diameter, lower-left position, nearly touching the
+// left bar's left edge.
+const DOT_POSITION: [number, number, number] = [-0.9, -0.6, 0]
+const DOT_RADIUS = 0.26
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))

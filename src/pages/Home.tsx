@@ -19,6 +19,7 @@ import { Act4Work } from '../scenes/Act4Work'
 import { Act5Contact } from '../scenes/Act5Contact'
 import { Footer } from '../components/Footer'
 import { ClosingTagline } from '../components/ClosingTagline'
+import { TransitionFlare } from '../components/TransitionFlare'
 import { useAppStore } from '../lib/store'
 
 /**
@@ -42,13 +43,18 @@ export function Home() {
   }, [])
 
   useEffect(() => {
+    // Tighter Lenis so scroll feels like direct manipulation, not like
+    // a fixed-speed animation playing over scroll input. Lower duration
+    // + higher lerp + full wheel response = camera tracks user's wheel
+    // velocity. Flicks scroll fast → acts rush past. Scroll slow → each
+    // act has time to read.
     const lenis = new Lenis({
-      duration: 1.6,
+      duration: 0.9,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      wheelMultiplier: 0.85,
-      touchMultiplier: 1.4,
-      lerp: 0.08,
+      wheelMultiplier: 1.0,
+      touchMultiplier: 1.6,
+      lerp: 0.14,
     })
 
     lenis.stop()
@@ -127,6 +133,9 @@ export function Home() {
         <Act5Contact />
         <ClosingTagline />
         <Footer />
+        {/* VFX bridge — teal radial burst at each inter-act push frame.
+            Mounted last so it overlays acts but sits below the nav. */}
+        <TransitionFlare />
       </div>
 
       {/* Scroll container — 5 sections of viewport-relative height. */}

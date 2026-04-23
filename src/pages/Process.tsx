@@ -3,32 +3,34 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import Lenis from 'lenis'
 import { Link } from 'react-router-dom'
-import { Billboard, Text } from '@react-three/drei'
 import { capabilities } from '../lib/copy'
+import { MindsMark } from '../three/MindsMark'
 import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
+import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
 
 /**
- * /process — the apparatus in motion.
+ * /process — the apparatus around the mark.
  *
- * Desktop: the seven capabilities arranged as a vertical data-flow
- * machine. Each discipline is a node with its code, title, and a
- * short description. A teal beam connects node-to-node, a pulse
- * travels top-to-bottom in a continuous loop.
+ * Composition (matches the home-page discipline):
+ *   – M at ORIGIN, scale 0.82 (same as home)
+ *   – Camera [0, 0.1, 7.5], fov 32 (same as home)
+ *   – Seven module SATELLITES orbit the M on a main ring
+ *   – Two ambient rings (inner + outer) add depth
+ *   – As you scroll, the satellite that corresponds to the module you're
+ *     reading brightens; the others dim. The ring rotates so every
+ *     module passes through the foreground.
  *
- * Scroll drives both the camera (gentle descent) and reveals each
- * capability one at a time — like walking through a Patek movement
- * under a loupe.
- *
- * Mobile: the vertical node list becomes a stacked timeline, identical
- * typography, no 3D machinery (portrait frame can't hold the vertical
- * apparatus gracefully). A soft M + particles backdrop remains.
+ * Text discipline — no copy sits over the centre of the canvas:
+ *   – Hero title pinned to TOP of its viewport
+ *   – Module sections use a narrow (max 40vw) column alternating L/R so
+ *     the M + orbital ring always stay visible in the other half.
  */
 
-const NARRATIVE: { intro: string; outro: string } = {
+const NARRATIVE = {
   intro:
-    'Every client sees a bespoke result. Behind each one is the same seven-stage engine.',
+    'Every client sees a bespoke result. Behind each one is the same seven-module engine orbiting a single mark.',
   outro:
     'Every module compounds. Listening shapes the model. The model writes the copy. The copy feeds the system. The system measures itself.',
 }
@@ -47,12 +49,12 @@ export function Process() {
 
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.6,
+      duration: 0.9,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      wheelMultiplier: 0.85,
-      touchMultiplier: 1.4,
-      lerp: 0.08,
+      wheelMultiplier: 1.0,
+      touchMultiplier: 1.6,
+      lerp: 0.14,
     })
     lenis.stop()
     lenis.scrollTo(0, { immediate: true })
@@ -77,12 +79,64 @@ export function Process() {
     if (lenis && typeof lenis.start === 'function') lenis.start()
   }, [appReady])
 
+  // Build the orbital configuration. Primary ring = seven module satellites,
+  // scroll-emphasis active. Inner + outer rings = ambient dust.
+  const orbits: Orbit[] = useMemo(
+    () => [
+      // INNER AMBIENT — small, fast, very tilted so the ring line reads
+      // as a horizontal pen-stroke behind the M.
+      {
+        id: 'inner-ambient',
+        radius: 1.85,
+        speed: 0.16,
+        tiltAxis: 'x',
+        tilt: 0.7,
+        ringOpacity: 0.08,
+        satellites: Array.from({ length: 12 }, (_, i) => ({
+          id: `inner-${i}`,
+          size: 0.035,
+        })),
+      },
+      // PRIMARY MODULE RING — the seven capabilities, each a satellite
+      // with its code label. Scroll-emphasis makes the active one glow.
+      {
+        id: 'modules',
+        radius: 3.15,
+        speed: 0.06,
+        tiltAxis: 'x',
+        tilt: 0.22,
+        ringOpacity: 0.16,
+        scrollEmphasis: true,
+        satellites: capabilities.map((c) => ({
+          id: c.id,
+          label: c.code,
+          size: 0.105,
+        })),
+      },
+      // OUTER AMBIENT — slow counter-rotation, larger radius, faint.
+      {
+        id: 'outer-ambient',
+        radius: 4.6,
+        speed: -0.04,
+        tiltAxis: 'z',
+        tilt: 0.35,
+        ringOpacity: 0.06,
+        satellites: Array.from({ length: 18 }, (_, i) => ({
+          id: `outer-${i}`,
+          size: 0.04,
+        })),
+      },
+    ],
+    []
+  )
+
   return (
     <>
-      {/* Minimal background canvas: particles + small M witness + camera drift */}
+      {/* Canvas: M at origin + three orbital rings + particles. Camera
+          drifts slowly around Y, giving the whole system a gentle parallax. */}
       <div className="fixed inset-0 z-[1]">
         <Canvas
-          camera={{ position: [0, 0, 9], fov: 34 }}
+          camera={{ position: [0, 0.1, 7.5], fov: 32 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -92,42 +146,49 @@ export function Process() {
           }}
           dpr={[1, 3]}
         >
-          <fog attach="fog" args={['#000000', 10, 26]} />
+          <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
             <ProcessCamera />
             <ParticleField />
-            <ApparatusPulse
-              count={capabilities.length}
-              onDotMount={setDotMesh}
-            />
+            <MindsMark scale={0.82} onDotMount={setDotMesh} />
+            <OrbitalStage orbits={orbits} />
             <PostProcess sunMesh={dotMesh} />
           </Suspense>
         </Canvas>
       </div>
 
       <div
-        className="relative z-10"
+        className="relative z-10 pointer-events-auto"
         style={{
           opacity: appReady ? 1 : 0,
           transition: 'opacity 600ms cubic-bezier(0.22, 1, 0.36, 1) 200ms',
         }}
       >
-        {/* HERO */}
-        <section className="min-h-screen flex flex-col items-center justify-center px-6 md:px-12">
-          <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-6">
-            The process
+        {/* HERO — title anchored TOP, intro at bottom. M + orbital ring
+            sit in the MIDDLE band of the viewport untouched. */}
+        <section className="min-h-screen flex flex-col justify-between px-6 md:px-12 lg:px-20 py-[14vh]">
+          <div className="max-w-[1100px] w-full">
+            <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-6">
+              The process
+            </div>
+            <h1 className="text-text-primary font-black text-[clamp(2.75rem,8vw,9rem)] leading-[0.86] tracking-tight md:tracking-tightest">
+              One engine.
+              <br />
+              Seven modules.
+            </h1>
           </div>
-          <h1 className="text-text-primary font-black text-[clamp(3rem,9vw,10rem)] leading-[0.85] tracking-tight md:tracking-tightest text-center max-w-4xl">
-            One engine.
-            <br />
-            Seven modules.
-          </h1>
-          <p className="mt-8 text-text-secondary text-[13px] md:text-[15px] leading-relaxed max-w-xl text-center">
-            {NARRATIVE.intro}
-          </p>
+          <div className="max-w-md md:max-w-lg">
+            <p className="text-text-secondary text-[13px] md:text-[15px] leading-relaxed">
+              {NARRATIVE.intro}
+            </p>
+            <div className="mt-6 text-text-secondary/50 text-[10px] uppercase tracking-[0.3em] animate-pulse">
+              Scroll to orbit the apparatus
+            </div>
+          </div>
         </section>
 
-        {/* SEVEN MODULES, one per viewport */}
+        {/* SEVEN MODULES — narrow side-column alternating L/R so the
+            centre of the viewport always shows the M + active satellite. */}
         {capabilities.map((cap, i) => (
           <ModuleSection
             key={cap.id}
@@ -139,29 +200,33 @@ export function Process() {
           />
         ))}
 
-        {/* OUTRO */}
-        <section className="min-h-screen flex flex-col items-center justify-center px-6 md:px-12 text-center">
-          <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-6">
-            The compound
+        {/* OUTRO — centred but text only, M still the focal point behind. */}
+        <section className="min-h-screen flex flex-col items-start justify-end px-6 md:px-12 lg:px-20 pb-[14vh]">
+          <div className="max-w-xl">
+            <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-6">
+              The compound
+            </div>
+            <h2 className="text-text-primary font-black text-[clamp(2rem,5vw,4.5rem)] leading-[0.9] tracking-tight md:tracking-tightest">
+              Every module compounds.
+            </h2>
+            <p className="mt-6 text-text-secondary text-[13px] md:text-[15px] leading-relaxed">
+              {NARRATIVE.outro}
+            </p>
+            <div className="mt-12 flex flex-col gap-4">
+              <Link
+                to="/#contact"
+                className="inline-flex items-center gap-2 text-text-primary text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border border-brand-teal/40 hover:border-brand-teal px-8 py-4 rounded-[3px] transition-colors w-fit"
+              >
+                Start a project →
+              </Link>
+              <Link
+                to="/"
+                className="text-text-secondary/70 hover:text-brand-teal text-[10px] uppercase tracking-[0.3em] font-medium transition-colors w-fit"
+              >
+                ← Return to the work
+              </Link>
+            </div>
           </div>
-          <h2 className="text-text-primary font-black text-[clamp(2.25rem,5.5vw,5.5rem)] leading-[0.88] tracking-tight md:tracking-tightest max-w-[1100px]">
-            Every module compounds.
-          </h2>
-          <p className="mt-8 text-text-secondary text-[13px] md:text-[15px] leading-relaxed max-w-xl">
-            {NARRATIVE.outro}
-          </p>
-          <Link
-            to="/#contact"
-            className="mt-16 inline-flex items-center gap-2 text-text-primary text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border border-brand-teal/40 hover:border-brand-teal px-8 py-4 rounded-[3px] transition-colors"
-          >
-            Start a project →
-          </Link>
-          <Link
-            to="/"
-            className="mt-8 text-text-secondary/70 hover:text-brand-teal text-[10px] uppercase tracking-[0.3em] font-medium transition-colors"
-          >
-            ← Return to the work
-          </Link>
         </section>
       </div>
     </>
@@ -169,8 +234,9 @@ export function Process() {
 }
 
 /**
- * One capability per viewport. Giant code + title + description,
- * alternating alignment, IntersectionObserver fade-in.
+ * ModuleSection — narrow column (max ~40vw) alternating left and right.
+ * The centre of the screen is ALWAYS empty, so the M + orbital ring
+ * remain the visible focus.
  */
 function ModuleSection({
   index,
@@ -191,7 +257,8 @@ function ModuleSection({
   useEffect(() => {
     if (!ref) return
     const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => e.isIntersecting && setVisible(true)),
+      (entries) =>
+        entries.forEach((e) => e.isIntersecting && setVisible(true)),
       { threshold: 0.35 }
     )
     io.observe(ref)
@@ -203,11 +270,11 @@ function ModuleSection({
   return (
     <section
       ref={setRef}
-      className="min-h-screen flex items-center justify-center px-6 md:px-12 lg:px-20"
+      className="min-h-screen flex items-center px-6 md:px-12 lg:px-20"
     >
       <div
         className={
-          'max-w-[1200px] w-full ' +
+          'max-w-[440px] lg:max-w-[480px] w-full ' +
           (alignRight ? 'ml-auto text-right' : 'mr-auto')
         }
         style={{
@@ -221,12 +288,13 @@ function ModuleSection({
         }}
       >
         <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-4 tabular-nums">
-          {code} · {String(index + 1).padStart(2, '0')} / {String(totalCount).padStart(2, '0')}
+          {code} · {String(index + 1).padStart(2, '0')} /{' '}
+          {String(totalCount).padStart(2, '0')}
         </div>
-        <h3 className="text-text-primary font-black text-[clamp(2.25rem,7vw,7rem)] leading-[0.9] tracking-tight md:tracking-tightest mb-6 md:mb-8">
+        <h3 className="text-text-primary font-black text-[clamp(1.75rem,4.5vw,4rem)] leading-[0.92] tracking-tight md:tracking-tightest mb-5">
           {title}
         </h3>
-        <p className="text-text-secondary text-[15px] md:text-[20px] leading-relaxed max-w-2xl md:max-w-[560px] ml-auto">
+        <p className="text-text-secondary text-[14px] md:text-[17px] leading-relaxed">
           {description}
         </p>
       </div>
@@ -235,140 +303,15 @@ function ModuleSection({
 }
 
 /**
- * ApparatusPulse — 3D visualisation of the seven capabilities as nodes
- * connected by a glowing teal beam, with a bright pulse travelling top-
- * to-bottom in a continuous loop. Minimal, background-only; the DOM
- * text is the focus.
- *
- * Also exposes the top node as `sunMesh` for the GodRays post-process.
- */
-function ApparatusPulse({
-  count,
-  onDotMount,
-}: {
-  count: number
-  onDotMount?: (mesh: THREE.Mesh) => void
-}) {
-  const groupRef = useRef<THREE.Group>(null!)
-  const pulseRef = useRef<THREE.Mesh>(null!)
-
-  // Nodes stacked vertically at evenly-spaced heights, slight x jitter for life.
-  const nodePositions = useMemo(() => {
-    const positions: THREE.Vector3[] = []
-    const totalHeight = 8
-    for (let i = 0; i < count; i++) {
-      const t = i / Math.max(1, count - 1)
-      const y = totalHeight / 2 - t * totalHeight
-      const x = Math.sin(i * 1.7) * 0.45 // gentle s-curve
-      positions.push(new THREE.Vector3(x, y, 0))
-    }
-    return positions
-  }, [count])
-
-  const beamGeometry = useMemo(() => {
-    const g = new THREE.BufferGeometry()
-    const pts = new Float32Array((nodePositions.length - 1) * 2 * 3)
-    for (let i = 0; i < nodePositions.length - 1; i++) {
-      const a = nodePositions[i]
-      const b = nodePositions[i + 1]
-      pts[i * 6 + 0] = a.x
-      pts[i * 6 + 1] = a.y
-      pts[i * 6 + 2] = a.z
-      pts[i * 6 + 3] = b.x
-      pts[i * 6 + 4] = b.y
-      pts[i * 6 + 5] = b.z
-    }
-    g.setAttribute('position', new THREE.BufferAttribute(pts, 3))
-    return g
-  }, [nodePositions])
-
-  const beamMaterial = useMemo(() => {
-    const mat = new THREE.LineBasicMaterial({
-      color: new THREE.Color('#73C5CC'),
-      transparent: true,
-      opacity: 0.35,
-    })
-    ;(mat as unknown as { toneMapped: boolean }).toneMapped = false
-    return mat
-  }, [])
-
-  const nodeMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#73C5CC').multiplyScalar(2.2),
-    })
-    mat.toneMapped = false
-    return mat
-  }, [])
-
-  const pulseMaterial = useMemo(() => {
-    const mat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#73C5CC').multiplyScalar(4.5),
-    })
-    mat.toneMapped = false
-    return mat
-  }, [])
-
-  useFrame((state) => {
-    const t = state.clock.elapsedTime
-    if (pulseRef.current) {
-      // Pulse travels top→bottom in 5s, then loops.
-      const u = (t / 5) % 1
-      const totalHeight = 8
-      const y = totalHeight / 2 - u * totalHeight
-      // Interpolate x along the node curve at the current height.
-      const x = Math.sin(u * Math.PI * 2 * 1.2) * 0.45
-      pulseRef.current.position.set(x, y, 0)
-      // Gentle scale pulse for life.
-      const s = 1 + Math.sin(t * 2.5) * 0.15
-      pulseRef.current.scale.setScalar(s)
-    }
-    if (groupRef.current) {
-      // Subtle whole-apparatus breathing rotation.
-      groupRef.current.rotation.y = Math.sin(t * 0.1) * 0.08
-    }
-  })
-
-  return (
-    <group ref={groupRef} position={[3.6, 0, 0]}>
-      <lineSegments geometry={beamGeometry} material={beamMaterial} />
-      {nodePositions.map((p, i) => (
-        <group key={i} position={p}>
-          <mesh
-            material={nodeMaterial}
-            ref={(m) => {
-              if (m && i === 0 && onDotMount) onDotMount(m)
-            }}
-          >
-            <sphereGeometry args={[0.11, 32, 32]} />
-          </mesh>
-          <Billboard follow={true} position={[0.55, 0, 0]}>
-            <Text
-              fontSize={0.22}
-              color="#73C5CC"
-              anchorX="left"
-              anchorY="middle"
-              outlineWidth={0}
-              material-toneMapped={false}
-              material-transparent={true}
-            >
-              M0{i + 1}
-            </Text>
-          </Billboard>
-        </group>
-      ))}
-      <mesh ref={pulseRef} material={pulseMaterial}>
-        <sphereGeometry args={[0.09, 24, 24]} />
-      </mesh>
-    </group>
-  )
-}
-
-/**
- * Slow camera with cursor parallax. Text is the content; camera supports.
+ * Process camera — slow orbit around the M with a scroll-driven yaw
+ * sweep. Starts looking at the M from slightly above; as you scroll, the
+ * camera rotates ~60° around the Y axis so each module satellite passes
+ * through the foreground in turn.
  */
 function ProcessCamera() {
   const mouse = useRef({ x: 0, y: 0 })
   const mouseSmoothed = useRef({ x: 0, y: 0 })
+  const scrollProgress = useAppStore((s) => s.scrollProgress)
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -385,11 +328,21 @@ function ProcessCamera() {
       (mouse.current.x - mouseSmoothed.current.x) * 0.04
     mouseSmoothed.current.y +=
       (mouse.current.y - mouseSmoothed.current.y) * 0.04
+
+    const sp = scrollProgress
+
+    // Yaw sweep from 0 to ~1.05 rad (~60°) as you scroll.
+    const yaw = sp * 1.05 + Math.sin(t * 0.08) * 0.04
+    const orbitRadius = 7.5 - sp * 0.8 // also dolly in slightly
+    const camX =
+      Math.sin(yaw) * orbitRadius + mouseSmoothed.current.x * 0.35
+    const camZ = Math.cos(yaw) * orbitRadius
+    const camY =
+      0.2 + Math.cos(t * 0.06) * 0.08 + mouseSmoothed.current.y * 0.25
+
     const cam = state.camera
-    cam.position.x = Math.sin(t * 0.08) * 0.1 + mouseSmoothed.current.x * 0.35
-    cam.position.y = Math.cos(t * 0.06) * 0.08 + mouseSmoothed.current.y * 0.25
-    cam.position.z = 9 + Math.sin(t * 0.05) * 0.1
-    cam.lookAt(1.5 + mouseSmoothed.current.x * 0.2, mouseSmoothed.current.y * 0.15, 0)
+    cam.position.set(camX, camY, camZ)
+    cam.lookAt(0, mouseSmoothed.current.y * 0.05, 0)
   })
 
   return null
