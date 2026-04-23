@@ -18,7 +18,10 @@ export function Act1Hero() {
       style={{ opacity }}
     >
       <div className="absolute bottom-[8vh] left-0 right-0 text-center px-6">
-        <h1 className="font-black leading-[0.82] tracking-tightest text-text-primary text-[clamp(3rem,9.5vw,12rem)]">
+        <h1
+          className="font-black leading-[0.82] tracking-tight md:tracking-tightest text-text-primary text-[clamp(3rem,9.5vw,12rem)]"
+          style={{ willChange: 'transform, opacity', transform: 'translate3d(0,0,0)' }}
+        >
           Minds<span className="text-brand-teal">AI</span>
         </h1>
         <p className="mt-2 text-text-primary/50 font-medium uppercase tracking-[0.3em] text-[0.65rem] md:text-[0.72rem]">

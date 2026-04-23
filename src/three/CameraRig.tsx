@@ -113,17 +113,18 @@ export function CameraRig() {
     desiredPos.current.y += Math.cos(t * 0.11) * 0.05
     desiredPos.current.z += Math.sin(t * 0.08) * 0.05
 
-    // Slow lerp = cinematic camera. Each frame the camera moves only ~8%
-    // toward its target, so scroll-triggered moves feel like a dolly track,
-    // not a snap. FOV eases similarly so zooms breathe into place.
-    camera.position.lerp(desiredPos.current, 0.08)
+    // Lerp 0.12 threads the needle between "cinematic" and "text stays
+    // in sync with scroll." Lenis is already smoothing wheel input at 0.08,
+    // so double-smoothing at 0.08 on camera too made text fades desync from
+    // camera moves. 0.12 keeps camera a half-frame behind scroll, not 0.6s.
+    camera.position.lerp(desiredPos.current, 0.12)
 
     lookAtTarget.current.copy(lookAt)
     camera.lookAt(lookAtTarget.current)
 
     if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
       const cam = camera as THREE.PerspectiveCamera
-      cam.fov = lerp(cam.fov, fov, 0.07)
+      cam.fov = lerp(cam.fov, fov, 0.1)
       cam.updateProjectionMatrix()
     }
   })

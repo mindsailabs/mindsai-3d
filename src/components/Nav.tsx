@@ -55,7 +55,7 @@ export function NavLogo() {
   return (
     <button
       onClick={scrollTo}
-      className="fixed top-5 left-5 md:top-6 md:left-8 z-30 pointer-events-auto text-text-primary font-black text-[13px] tracking-tightest"
+      className="fixed top-5 left-5 md:top-6 md:left-8 z-30 pointer-events-auto text-text-primary font-black text-[13px] tracking-tight"
     >
       Minds<span className="text-brand-teal">AI</span>
     </button>

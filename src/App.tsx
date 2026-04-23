@@ -74,7 +74,10 @@ export default function App() {
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
-          dpr={[1, 2]}
+          // DPR ceiling raised 2 → 3 so the 3D render matches the UI layer on
+          // retina / 3x displays (iPad Pro, iPhone 15+). Floor stays 1 so
+          // low-end GPUs don't choke.
+          dpr={[1, 3]}
         >
           <color attach="background" args={['#000000']} />
           <Suspense fallback={null}>
