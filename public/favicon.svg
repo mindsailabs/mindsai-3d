@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- MindsAI mark — favicon at 32x32. Two slanted bars in white (works on
+       both light and dark browser chrome) with the teal accent dot to the
+       lower-left, matching the 3D mark on the site. -->
+  <rect width="32" height="32" fill="#000000"/>
+  <!-- Left bar -->
+  <path d="M 11.5 5.5 L 13.5 5.5 L 16 25 L 14 25 Z" fill="#FFFFFF"/>
+  <!-- Right bar -->
+  <path d="M 18.5 5.5 L 20.5 5.5 L 23 25 L 21 25 Z" fill="#FFFFFF"/>
+  <!-- Teal accent dot -->
+  <circle cx="7" cy="21.5" r="2.2" fill="#73C5CC"/>
+</svg>

@@ -113,6 +113,7 @@ export const fragmentShader = /* glsl */ `
   uniform float uReflectionMix;
   uniform float uTime;
   uniform float uIridescenceStrength;
+  uniform float uSeed;
 
   varying vec3 vWorldNormal;
   varying vec3 vWorldPosition;
@@ -217,11 +218,14 @@ export const fragmentShader = /* glsl */ `
     // IRIDESCENCE — thin-film-style spectral sheen. Clamped to the
     // silhouette via fresnel^3 and weighted low so it's a *whisper* of
     // rainbow, not a disco ball. The orb should read as premium dark
-    // glass first, iridescent second.
+    // glass first, iridescent second. Per-visitor seed offsets the phase
+    // so two visitors see subtly different sheen patterns — the
+    // "it remembers me" brand tell.
     float iridPhase =
       NdotV * 2.5
       + vWorldPosition.y * 0.35
-      + uTime * 0.08;
+      + uTime * 0.08
+      + uSeed * 6.283;
     vec3 iridColor = iridescence(iridPhase);
     color += iridColor * fresnel * fresnel * fresnel * uIridescenceStrength;
 

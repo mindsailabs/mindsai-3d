@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { useMemo, useRef } from 'react'
 import { vertexShader, fragmentShader } from './orbShaders'
 import { useAppStore } from '../lib/store'
+import { useSessionSeed } from '../lib/useSessionSeed'
 
 /**
  * MindsAI mark — the narrative spine.
@@ -47,6 +48,7 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
   hdr.mapping = THREE.EquirectangularReflectionMapping
 
   const scrollProgress = useAppStore((s) => s.scrollProgress)
+  const { numeric: seedNumeric } = useSessionSeed()
 
   const groupRef = useRef<THREE.Group>(null!)
   const innerRef = useRef<THREE.Group>(null!)
@@ -76,8 +78,15 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
       // premium dark glass first, with a whisper of rainbow sheen only
       // at the silhouette.
       uIridescenceStrength: { value: 0.18 },
+      // Session seed — a float in [0,1) unique to this visitor this day.
+      // Feeds into iridescence phase offset + a subtle displacement bias
+      // so each visitor's M is a one-of-one variation. Almost imperceptible
+      // individually, but combined with the "Your signature: M-XXXX-XXXX"
+      // reveal on the contact success state, creates the "it remembered
+      // me" brand moment.
+      uSeed: { value: seedNumeric },
     }),
-    [hdr]
+    [hdr, seedNumeric]
   )
 
   const dotMaterial = useMemo(() => {

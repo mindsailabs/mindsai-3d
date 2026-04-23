@@ -21,7 +21,14 @@ import { useViewport } from '../lib/useViewport'
  */
 
 const NODE_COUNT = capabilities.length // 7
-const ORBIT_RADIUS = 2.6
+const ORBIT_RADIUS_DESKTOP = 2.6
+// Mobile: tighter orbit so the ring fits within the portrait viewport AND
+// so labels at the 3 o'clock / 9 o'clock positions don't extend past the
+// frame edge. Calibrated against a 375-wide viewport with the wider mobile
+// FOV (38°) from CameraRig.
+// Mobile orbit stays tight but no longer has to accommodate full titles
+// (those live in a legend at the bottom of the viewport — see Act3Capabilities).
+const ORBIT_RADIUS_MOBILE = 1.7
 const ORBIT_TILT_X = 0.22
 
 export function CapabilityNodes() {
@@ -33,10 +40,14 @@ export function CapabilityNodes() {
   // SDF text size in world units scales down on mobile — the camera is
   // closer in relative terms and the aspect is narrower, so the same
   // fontSize reads as giant clipping text.
-  const labelCodeSize = isMobile ? 0.055 : 0.09
-  const labelTitleSize = isMobile ? 0.09 : 0.15
-  // Also tighten label position to node so labels don't drift into M area.
-  const labelYOffset = isMobile ? 0.24 : 0.36
+  const labelCodeSize = isMobile ? 0.04 : 0.09
+  const labelTitleSize = isMobile ? 0.055 : 0.15
+  const labelYOffset = isMobile ? 0.2 : 0.36
+  const orbitRadius = isMobile ? ORBIT_RADIUS_MOBILE : ORBIT_RADIUS_DESKTOP
+  // maxWidth 0.85 on mobile forces ALL titles (even "Workflows & Automation
+  // Systems") onto 2-3 lines inside the viewport. Compact layout >
+  // spilling edges.
+  const labelMaxWidth = isMobile ? 0.85 : 4.0
 
   const groupRef = useRef<THREE.Group>(null!)
   const ringRef = useRef<THREE.Mesh>(null!)
@@ -107,7 +118,7 @@ export function CapabilityNodes() {
       mesh.getWorldPosition(worldPos)
       const frontBias = Math.max(
         0,
-        Math.min(1, (worldPos.z + ORBIT_RADIUS) / (2 * ORBIT_RADIUS))
+        Math.min(1, (worldPos.z + orbitRadius) / (2 * orbitRadius))
       )
       const labelGroup = labelGroupRefs.current[i]
       if (labelGroup) {
@@ -128,12 +139,12 @@ export function CapabilityNodes() {
     <group ref={groupRef} position={[0, 0.1, 0]}>
       {/* Orbit ring */}
       <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]} material={ringMaterial}>
-        <torusGeometry args={[ORBIT_RADIUS, 0.006, 8, 96]} />
+        <torusGeometry args={[orbitRadius, 0.006, 8, 96]} />
       </mesh>
 
       {baseAngles.map((angle, i) => {
-        const x = Math.cos(angle) * ORBIT_RADIUS
-        const z = Math.sin(angle) * ORBIT_RADIUS
+        const x = Math.cos(angle) * orbitRadius
+        const z = Math.sin(angle) * orbitRadius
         const cap = capabilities[i]
         return (
           <group key={cap.id} position={[x, 0, z]}>
@@ -147,10 +158,10 @@ export function CapabilityNodes() {
             >
               <sphereGeometry args={[0.1, 32, 32]} />
             </mesh>
-            {/* SDF label group — billboards so text always reads front-on
-                regardless of orbit rotation. Two lines: M0x code in teal,
-                title in white. Positioned slightly above the node. Mobile
-                uses smaller fontSize + tighter offset to fit narrow aspect. */}
+            {/* SDF label group. Desktop: full code + title. Mobile: just
+                the M-code — full titles live in a viewport-anchored legend
+                (see Act3Capabilities.tsx) so the 3D orbit stays composed
+                inside the portrait frame. */}
             <Billboard follow={true} position={[0, labelYOffset, 0]}>
               <group
                 ref={(g) => {
@@ -170,21 +181,23 @@ export function CapabilityNodes() {
                 >
                   {cap.code}
                 </Text>
-                <Text
-                  fontSize={labelTitleSize}
-                  color="#FFFFFF"
-                  anchorX="center"
-                  anchorY="top"
-                  position={[0, -0.04, 0]}
-                  fontWeight={500}
-                  maxWidth={isMobile ? 2.4 : 4.0}
-                  textAlign="center"
-                  outlineWidth={0}
-                  material-toneMapped={false}
-                  material-transparent={true}
-                >
-                  {cap.title}
-                </Text>
+                {!isMobile && (
+                  <Text
+                    fontSize={labelTitleSize}
+                    color="#FFFFFF"
+                    anchorX="center"
+                    anchorY="top"
+                    position={[0, -0.04, 0]}
+                    fontWeight={500}
+                    maxWidth={labelMaxWidth}
+                    textAlign="center"
+                    outlineWidth={0}
+                    material-toneMapped={false}
+                    material-transparent={true}
+                  >
+                    {cap.title}
+                  </Text>
+                )}
               </group>
             </Billboard>
           </group>

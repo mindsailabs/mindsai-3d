@@ -11,6 +11,11 @@ interface AppState {
   setFeaturedWorkIndex: (i: number) => void
   featuredOutcome: number
   setFeaturedOutcome: (i: number) => void
+  /** True once the preloader cinematic has completed and the user can scroll.
+   *  Lenis is paused until this flips to true, so scroll can't "leak" past
+   *  the opening shot. */
+  appReady: boolean
+  setAppReady: (r: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -24,4 +29,6 @@ export const useAppStore = create<AppState>((set) => ({
   setFeaturedWorkIndex: (i) => set({ featuredWorkIndex: i }),
   featuredOutcome: 0,
   setFeaturedOutcome: (i) => set({ featuredOutcome: i }),
+  appReady: false,
+  setAppReady: (r) => set({ appReady: r }),
 }))

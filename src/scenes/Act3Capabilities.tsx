@@ -1,15 +1,25 @@
-import { smoothFade } from '../lib/copy'
+import { capabilities, smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * Act 3 — "How We Do It" — scroll 0.316 → 0.506
  *
- * Capability labels + nodes are 3D elements in the scene (see CapabilityNodes.tsx).
- * This component only renders the act HEADLINE at the top of the viewport.
+ * Desktop: the 3D orbital ring (CapabilityNodes.tsx) is the whole show —
+ * seven glowing nodes, each with an SDF text label floating above it.
+ * Plenty of horizontal room for long titles like "Workflows & Automation
+ * Systems". This overlay only contributes the act headline at top.
+ *
+ * Mobile: the orbital ring fits into portrait, but full titles can't.
+ * CapabilityNodes.tsx therefore renders only the M-codes (M01–M07) in the
+ * 3D scene on mobile, and this component renders the full capability list
+ * as a clean stacked legend below the ring — code + title per row,
+ * everything fits, nothing truncates.
  */
 export function Act3Capabilities() {
   const progress = useAppStore((s) => s.scrollProgress)
   const opacity = smoothFade(progress, 0.316, 0.36, 0.47, 0.506)
+  const { isMobile } = useViewport()
   if (opacity <= 0.001) return null
 
   return (
@@ -18,6 +28,7 @@ export function Act3Capabilities() {
       style={{ opacity }}
       aria-hidden={opacity < 0.5}
     >
+      {/* HEADLINE */}
       <div className="absolute top-[10vh] left-0 right-0 flex flex-col items-center">
         <div
           className="text-[10px] md:text-[11px] uppercase tracking-[0.4em] text-brand-teal font-medium"
@@ -42,6 +53,27 @@ export function Act3Capabilities() {
           One system.
         </h2>
       </div>
+
+      {/* MOBILE LEGEND — full capability names below the orbital ring. */}
+      {isMobile && (
+        <div className="absolute inset-x-0 bottom-[6vh] px-5">
+          <div className="mx-auto max-w-[360px] grid grid-cols-1 gap-2">
+            {capabilities.map((cap) => (
+              <div
+                key={cap.id}
+                className="flex items-baseline gap-3 border-t border-white/[0.06] pt-2"
+              >
+                <span className="text-brand-teal text-[9px] uppercase tracking-[0.25em] font-medium tabular-nums shrink-0 w-[30px]">
+                  {cap.code}
+                </span>
+                <span className="text-text-primary text-[12px] font-medium leading-tight">
+                  {cap.title}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

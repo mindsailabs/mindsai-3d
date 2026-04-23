@@ -21,18 +21,27 @@ import { Act5Contact } from './scenes/Act5Contact'
 import { Nav, NavLogo } from './components/Nav'
 import { Footer } from './components/Footer'
 import { AudioSystem } from './components/AudioSystem'
+import { OpeningFade } from './components/OpeningFade'
 import { useAppStore } from './lib/store'
 
 export default function App() {
   const setScrollProgress = useAppStore((s) => s.setScrollProgress)
+  const appReady = useAppStore((s) => s.appReady)
   const [dotMesh, setDotMesh] = useState<THREE.Mesh | null>(null)
+
+  // Browsers restore scroll on reload by default. For a scroll-choreographed
+  // site we MUST start at 0 on every load — otherwise the first paint can
+  // land mid-Act-3 with no context. Disable browser's scrollRestoration and
+  // hard-zero the scroll position before Lenis mounts.
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+    window.scrollTo(0, 0)
+  }, [])
 
   useEffect(() => {
     const lenis = new Lenis({
-      // Cinematic scroll inertia — wheel flicks feel like a dolly move rather
-      // than an immediate jump. Longer duration + easing means the scene
-      // "continues" briefly after the user stops scrolling, which is the
-      // premium-site feel Active Theory et al. share.
       duration: 1.6,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
@@ -40,6 +49,14 @@ export default function App() {
       touchMultiplier: 1.4,
       lerp: 0.08,
     })
+
+    // Lenis spawns running. We pause it until the preloader cinematic
+    // completes (`appReady` flips true) so scroll cannot leak past the
+    // opening shot. A simple flag keeps the RAF loop running (three.js
+    // still renders, the canvas still animates) while the SCROLL value
+    // stays pinned at 0.
+    lenis.stop()
+    lenis.scrollTo(0, { immediate: true })
 
     lenis.on('scroll', (e: Lenis) => {
       setScrollProgress(e.progress)
@@ -52,7 +69,6 @@ export default function App() {
     }
     rafId = requestAnimationFrame(raf)
 
-    // Expose Lenis on window so Nav links + tests can use its scrollTo API.
     ;(window as unknown as { __lenis: Lenis }).__lenis = lenis
 
     return () => {
@@ -60,6 +76,13 @@ export default function App() {
       lenis.destroy()
     }
   }, [setScrollProgress])
+
+  // When the preloader finishes, start Lenis.
+  useEffect(() => {
+    if (!appReady) return
+    const lenis = (window as unknown as { __lenis?: { start: () => void } }).__lenis
+    if (lenis && typeof lenis.start === 'function') lenis.start()
+  }, [appReady])
 
   return (
     <>
@@ -103,18 +126,28 @@ export default function App() {
         </Canvas>
       </div>
 
-      {/* Persistent nav + audio toggle */}
-      <NavLogo />
-      <Nav />
-      <AudioSystem />
+      {/* Opening veil — black curtain over the scene until the first
+          render settles, then lifts in 900ms. No decorated preloader. */}
+      <OpeningFade />
 
-      {/* Act overlays */}
-      <Act1Hero />
-      <Act2Outcomes />
-      <Act3Capabilities />
-      <Act4Work />
-      <Act5Contact />
-      <Footer />
+      {/* Everything else fades in 400ms AFTER the preloader completes so the
+          reveal is a clean beat, not a messy simultaneous entrance. */}
+      <div
+        style={{
+          opacity: appReady ? 1 : 0,
+          transition: 'opacity 600ms cubic-bezier(0.22, 1, 0.36, 1) 200ms',
+        }}
+      >
+        <NavLogo />
+        <Nav />
+        <AudioSystem />
+        <Act1Hero />
+        <Act2Outcomes />
+        <Act3Capabilities />
+        <Act4Work />
+        <Act5Contact />
+        <Footer />
+      </div>
 
       {/* Scroll container — provides 7+ viewports of scroll distance.
           Work section gets extra height so each of 6 case-study videos has
