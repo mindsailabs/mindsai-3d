@@ -104,6 +104,11 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
   // over ~0.4s even if the user stops scrolling.
   const smoothedVelocity = useRef(0)
 
+  // Hover spike — pointer entering the M's 3D bounds adds a temporary
+  // bump to the effective velocity. Decays over ~0.6s after hover leaves.
+  const hoverSpike = useRef(0)
+  const hoverTarget = useRef(0)
+
   useFrame((state) => {
     const t = state.clock.elapsedTime
     const sp = scrollProgress
@@ -116,9 +121,22 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
     smoothedVelocity.current +=
       (targetVel - smoothedVelocity.current) * 0.14
 
+    // Ease hover spike toward target (1 when hovered, 0 when not) with a
+    // slower rise than fall so hover feels deliberate, not twitchy.
+    const hoverLerpRate =
+      hoverTarget.current > hoverSpike.current ? 0.08 : 0.04
+    hoverSpike.current +=
+      (hoverTarget.current - hoverSpike.current) * hoverLerpRate
+
+    // Combined uniform = scroll velocity + hover bump. Hover contributes
+    // up to +0.9 on top of scroll velocity so interacting with the M feels
+    // like the orb responding to you directly.
+    const combinedVelocity =
+      smoothedVelocity.current + hoverSpike.current * 0.9
+
     if (leftMatRef.current) {
       leftMatRef.current.uniforms.uTime.value = t
-      leftMatRef.current.uniforms.uVelocity.value = smoothedVelocity.current
+      leftMatRef.current.uniforms.uVelocity.value = combinedVelocity
     }
 
     // ---- Scroll-driven choreography ----
@@ -193,7 +211,20 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
   })
 
   return (
-    <group ref={groupRef} position={[0.1, 0.25, 0]}>
+    <group
+      ref={groupRef}
+      position={[0.1, 0.25, 0]}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        hoverTarget.current = 1
+        document.body.style.cursor = 'pointer'
+      }}
+      onPointerOut={(e) => {
+        e.stopPropagation()
+        hoverTarget.current = 0
+        document.body.style.cursor = ''
+      }}
+    >
       <group ref={innerRef}>
         <mesh ref={leftBarRef} position={[-BAR_SEPARATION / 2, 0, 0]} rotation={[0, 0, LEAN_RADIANS]}>
           <boxGeometry args={[BAR_WIDTH, BAR_HEIGHT, BAR_DEPTH, 2, 8, 2]} />
