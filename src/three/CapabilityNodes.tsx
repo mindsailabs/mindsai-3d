@@ -4,6 +4,7 @@ import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { capabilities, smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * Seven capability nodes orbiting the M during Act 3.
@@ -27,6 +28,15 @@ export function CapabilityNodes() {
   const progress = useAppStore((s) => s.scrollProgress)
   const hoveredCapability = useAppStore((s) => s.hoveredCapability)
   const setHoveredCapability = useAppStore((s) => s.setHoveredCapability)
+  const { isMobile } = useViewport()
+
+  // SDF text size in world units scales down on mobile — the camera is
+  // closer in relative terms and the aspect is narrower, so the same
+  // fontSize reads as giant clipping text.
+  const labelCodeSize = isMobile ? 0.055 : 0.09
+  const labelTitleSize = isMobile ? 0.09 : 0.15
+  // Also tighten label position to node so labels don't drift into M area.
+  const labelYOffset = isMobile ? 0.24 : 0.36
 
   const groupRef = useRef<THREE.Group>(null!)
   const ringRef = useRef<THREE.Mesh>(null!)
@@ -139,15 +149,16 @@ export function CapabilityNodes() {
             </mesh>
             {/* SDF label group — billboards so text always reads front-on
                 regardless of orbit rotation. Two lines: M0x code in teal,
-                title in white. Positioned slightly above the node. */}
-            <Billboard follow={true} position={[0, 0.36, 0]}>
+                title in white. Positioned slightly above the node. Mobile
+                uses smaller fontSize + tighter offset to fit narrow aspect. */}
+            <Billboard follow={true} position={[0, labelYOffset, 0]}>
               <group
                 ref={(g) => {
                   labelGroupRefs.current[i] = g
                 }}
               >
                 <Text
-                  fontSize={0.09}
+                  fontSize={labelCodeSize}
                   color="#73C5CC"
                   anchorX="center"
                   anchorY="bottom"
@@ -160,12 +171,14 @@ export function CapabilityNodes() {
                   {cap.code}
                 </Text>
                 <Text
-                  fontSize={0.15}
+                  fontSize={labelTitleSize}
                   color="#FFFFFF"
                   anchorX="center"
                   anchorY="top"
                   position={[0, -0.04, 0]}
                   fontWeight={500}
+                  maxWidth={isMobile ? 2.4 : 4.0}
+                  textAlign="center"
                   outlineWidth={0}
                   material-toneMapped={false}
                   material-transparent={true}

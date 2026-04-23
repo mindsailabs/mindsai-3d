@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * Layered ambient starfield.
@@ -19,6 +20,7 @@ const particleVertex = /* glsl */ `
 
   uniform float uTime;
   uniform float uPixelDensity;
+  uniform float uSizeScale;
 
   varying float vTwinkle;
   varying float vFogDepth;
@@ -41,7 +43,9 @@ const particleVertex = /* glsl */ `
     vTwinkle = smoothstep(0.0, 0.3, t) * smoothstep(1.0, 0.7, t);
 
     // Size with distance attenuation so near points are bigger naturally.
-    gl_PointSize = aSize * uPixelDensity * (1.0 + vTwinkle * 0.5) *
+    // uSizeScale is a viewport-aware multiplier (smaller on mobile so the
+    // foreground sparks don't dominate the narrower frame).
+    gl_PointSize = aSize * uPixelDensity * uSizeScale * (1.0 + vTwinkle * 0.5) *
                    (50.0 / -mvPos.z);
 
     // Expose camera-space depth for the fragment to apply fog.
@@ -89,6 +93,8 @@ interface ParticleLayerProps {
   opacity: number
   driftSpeed: number
   tintScale: number
+  /** Viewport-aware multiplier for gl_PointSize. 1 on desktop, 0.45 on mobile. */
+  sizeScale: number
 }
 
 function ParticleLayer({
@@ -100,6 +106,7 @@ function ParticleLayer({
   opacity,
   driftSpeed,
   tintScale,
+  sizeScale,
 }: ParticleLayerProps) {
   const pointsRef = useRef<THREE.Points>(null!)
   const matRef = useRef<THREE.ShaderMaterial>(null!)
@@ -134,16 +141,18 @@ function ParticleLayer({
       uTint: { value: new THREE.Color('#73C5CC').multiplyScalar(tintScale) },
       uOpacity: { value: opacity },
       uPixelDensity: { value: Math.min(window.devicePixelRatio || 1, 2) },
+      uSizeScale: { value: sizeScale },
       uFogColor: { value: new THREE.Color('#000000') },
       uFogNear: { value: 9 },
       uFogFar: { value: 26 },
     }),
-    [tintScale, opacity]
+    [tintScale, opacity, sizeScale]
   )
 
   useFrame((state) => {
     if (matRef.current) {
       matRef.current.uniforms.uTime.value = state.clock.elapsedTime
+      matRef.current.uniforms.uSizeScale.value = sizeScale
     }
     if (pointsRef.current) {
       pointsRef.current.rotation.y = state.clock.elapsedTime * driftSpeed
@@ -168,11 +177,17 @@ function ParticleLayer({
 }
 
 export function ParticleField() {
+  const { isMobile } = useViewport()
+  // On mobile viewports the canvas is portrait/narrow, so particles that
+  // look subtle at 1920×1080 look like giant bokeh orbs at 375×812. Scale
+  // everything down proportionally.
+  const sizeScale = isMobile ? 0.45 : 1
+
   return (
     <group>
       {/* Deepest layer — dim backdrop dust, fogged by distance. */}
       <ParticleLayer
-        count={700}
+        count={isMobile ? 300 : 700}
         spread={[32, 20, 18]}
         depth={-8}
         sizeBase={0.8}
@@ -180,10 +195,11 @@ export function ParticleField() {
         opacity={0.4}
         driftSpeed={0.006}
         tintScale={0.7}
+        sizeScale={sizeScale}
       />
       {/* Mid-far — the visual bulk of the starfield. */}
       <ParticleLayer
-        count={500}
+        count={isMobile ? 220 : 500}
         spread={[22, 14, 12]}
         depth={-3}
         sizeBase={1.0}
@@ -191,10 +207,11 @@ export function ParticleField() {
         opacity={0.55}
         driftSpeed={0.012}
         tintScale={1.3}
+        sizeScale={sizeScale}
       />
       {/* Mid-near — brighter, more twinkle, contributes to the sparkle read. */}
       <ParticleLayer
-        count={260}
+        count={isMobile ? 120 : 260}
         spread={[16, 10, 8]}
         depth={-1}
         sizeBase={1.3}
@@ -202,10 +219,11 @@ export function ParticleField() {
         opacity={0.75}
         driftSpeed={0.02}
         tintScale={1.9}
+        sizeScale={sizeScale}
       />
       {/* Foreground — rare large sparks close to camera, high twinkle. */}
       <ParticleLayer
-        count={80}
+        count={isMobile ? 30 : 80}
         spread={[12, 8, 5]}
         depth={2}
         sizeBase={1.8}
@@ -213,6 +231,7 @@ export function ParticleField() {
         opacity={0.85}
         driftSpeed={0.034}
         tintScale={2.5}
+        sizeScale={sizeScale}
       />
     </group>
   )

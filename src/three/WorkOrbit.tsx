@@ -7,11 +7,18 @@ import { useAppStore } from '../lib/store'
 /**
  * Work carousel — 6 case-study cards orbit the M with SNAP scroll behavior.
  *
- * Scroll divides Act 4 into 6 slots (one per case study). Within each slot
- * the rotation HOLDS so the featured video plays undisturbed. Scroll advances
- * past the slot boundary and the carousel snaps to the next card. Videos
- * PAUSE when not featured, PLAY when featured. Like a curtain stack with a
- * pause between each reveal.
+ * v3 — centralised video pool.
+ *
+ *   Prior version created/destroyed a <video> element per CardMesh useEffect
+ *   each time `shouldMountVideos` flipped. Fast scroll → aborted range
+ *   requests → partial-load failures on specific cards (Northwood, Kelvin
+ *   were regular offenders because their requests got preempted by the
+ *   Lenis-driven "flick through the section" behaviour).
+ *
+ *   New approach: the WorkOrbit parent owns all six <video> elements, mounts
+ *   them hidden in the DOM once, and lets them preload autonomously. Cards
+ *   just bind the matching VideoTexture and toggle play/pause via ref. No
+ *   per-card re-creation, no aborted fetches.
  */
 
 const ORBIT_RADIUS = 5.8
@@ -28,49 +35,99 @@ function smoothstep(edge0: number, edge1: number, t: number): number {
   return c * c * (3 - 2 * c)
 }
 
+/** A video element + its VideoTexture, bundled. Owned by the parent orbit. */
+interface VideoBinding {
+  video: HTMLVideoElement
+  texture: THREE.VideoTexture
+}
+
+/** Hook that creates & owns the six video elements for the carousel. Returns
+ *  null while mounting has not yet triggered (so CardMesh renders a placeholder
+ *  material for the empty period). */
+function useVideoPool(shouldMount: boolean): VideoBinding[] | null {
+  const [pool, setPool] = useState<VideoBinding[] | null>(null)
+  const builtRef = useRef(false)
+
+  useEffect(() => {
+    if (!shouldMount || builtRef.current) return
+    builtRef.current = true
+
+    // Create a hidden container so videos are in-DOM (some browsers treat
+    // detached <video> elements with reduced priority for buffering).
+    const container = document.createElement('div')
+    container.setAttribute('aria-hidden', 'true')
+    container.style.cssText =
+      'position:absolute;width:1px;height:1px;top:-9999px;left:-9999px;' +
+      'pointer-events:none;opacity:0;overflow:hidden;'
+    document.body.appendChild(container)
+
+    const built: VideoBinding[] = caseStudies.map((study) => {
+      const video = document.createElement('video')
+      video.src = study.videoPath
+      video.loop = true
+      video.muted = true
+      video.playsInline = true
+      // preload="auto" tells the browser to buffer the full video as soon
+      // as possible. Without this, Safari/Chrome often only fetch metadata
+      // until play() is called, and the subsequent range request can race
+      // the user's scroll and get aborted.
+      video.preload = 'auto'
+      // Kick the load explicitly so `loadedmetadata` fires early.
+      video.load()
+      container.appendChild(video)
+
+      const texture = new THREE.VideoTexture(video)
+      texture.colorSpace = THREE.SRGBColorSpace
+      texture.minFilter = THREE.LinearFilter
+      texture.magFilter = THREE.LinearFilter
+
+      return { video, texture }
+    })
+
+    setPool(built)
+
+    return () => {
+      // On unmount: fully tear down.
+      built.forEach(({ video, texture }) => {
+        video.pause()
+        video.removeAttribute('src')
+        video.load()
+        texture.dispose()
+      })
+      if (container.parentNode) container.parentNode.removeChild(container)
+      builtRef.current = false
+    }
+  }, [shouldMount])
+
+  return pool
+}
+
 interface CardMeshProps {
-  study: (typeof caseStudies)[number]
-  shouldPlay: boolean
+  binding: VideoBinding | null
   isFeatured: boolean
   frontness: number
 }
 
-function CardMesh({ study, shouldPlay, isFeatured, frontness }: CardMeshProps) {
-  const [videoTexture, setVideoTexture] = useState<THREE.VideoTexture | null>(null)
-  const videoElRef = useRef<HTMLVideoElement | null>(null)
+function CardMesh({ binding, isFeatured, frontness }: CardMeshProps) {
   const groupRef = useRef<THREE.Group>(null!)
 
+  // Play/pause via ref — does NOT reset currentTime, so a partly-buffered
+  // video isn't forced to re-seek every time it becomes featured. play()
+  // on an already-playing video is a no-op; on a paused one it resumes.
   useEffect(() => {
-    if (!shouldPlay) return
-    const video = document.createElement('video')
-    video.src = study.videoPath
-    video.loop = true
-    video.muted = true
-    video.playsInline = true
-    video.crossOrigin = 'anonymous'
-    videoElRef.current = video
-    const tex = new THREE.VideoTexture(video)
-    tex.colorSpace = THREE.SRGBColorSpace
-    setVideoTexture(tex)
-    return () => {
-      video.pause()
-      video.src = ''
-      tex.dispose()
-    }
-  }, [shouldPlay, study.videoPath])
-
-  // Play when featured, pause otherwise. Featured card resets to start so
-  // each "arrival" feels like a fresh beginning — curtain-stack feel.
-  useEffect(() => {
-    const v = videoElRef.current
-    if (!v) return
+    if (!binding) return
+    const { video } = binding
     if (isFeatured) {
-      v.currentTime = 0
-      v.play().catch(() => {})
+      // Rewind only if the video has reached the end (it loops, but just in
+      // case). This avoids the "buffer stall from seeking to 0" trap that
+      // was killing slots 0 and 3.
+      if (video.ended) video.currentTime = 0
+      const p = video.play()
+      if (p && typeof p.catch === 'function') p.catch(() => {})
     } else {
-      v.pause()
+      video.pause()
     }
-  }, [isFeatured])
+  }, [binding, isFeatured])
 
   const fallbackMat = useMemo(() => {
     return new THREE.MeshBasicMaterial({ color: new THREE.Color('#0a1115') })
@@ -114,9 +171,9 @@ function CardMesh({ study, shouldPlay, isFeatured, frontness }: CardMeshProps) {
     <group ref={groupRef}>
       <mesh>
         <planeGeometry args={[CARD_HEIGHT_BASE * CARD_ASPECT, CARD_HEIGHT_BASE]} />
-        {videoTexture ? (
+        {binding ? (
           <meshBasicMaterial
-            map={videoTexture}
+            map={binding.texture}
             toneMapped={false}
             transparent
             opacity={cardOpacity}
@@ -141,39 +198,36 @@ export function WorkOrbit() {
   const currentSlotRef = useRef(0)
   const lastFeaturedRef = useRef(-1)
 
+  // Mount the video pool once as the user approaches Act 4. The 0.46 threshold
+  // starts buffering ~40vh before the first card becomes visible so the
+  // network fetch happens out-of-band of the scroll animation.
+  const shouldMountVideos = progress > 0.46
+  const videoPool = useVideoPool(shouldMountVideos)
+
   useFrame(() => {
     const sp = progress
     const act4Alpha = smoothFade(sp, 0.49, 0.55, 0.83, 0.861)
 
     if (groupRef.current) {
-      // SNAP-SCROLL with padded boundaries.
-      //
-      // Users complained the first/last videos never got a "beat" to play —
-      // scroll dropped them straight into a transition at the Act-4 boundary.
-      // Fix: reserve the first BOUNDARY_PAD and last BOUNDARY_PAD of Act 4 as
-      // pure HOLD on card 0 / card 5, and map the remaining span across the
-      // (SLOT_COUNT-1) transitions between videos. Per-slot HOLD also bumped
-      // to 82% (was 70%) so each card plays undisturbed longer.
       const act4Linear = Math.max(0, Math.min(1, (sp - ACT4_START) / ACT4_SPAN))
       const BOUNDARY_PAD = 0.2
       const transZone = 1 - 2 * BOUNDARY_PAD
 
       let rawPos: number
       if (act4Linear <= BOUNDARY_PAD) {
-        rawPos = 0 // HOLD on card 0
+        rawPos = 0
       } else if (act4Linear >= 1 - BOUNDARY_PAD) {
-        rawPos = SLOT_COUNT - 1 // HOLD on last card
+        rawPos = SLOT_COUNT - 1
       } else {
-        const t = (act4Linear - BOUNDARY_PAD) / transZone // 0..1
-        rawPos = t * (SLOT_COUNT - 1) // 0..5 across the 5 transitions
+        const t = (act4Linear - BOUNDARY_PAD) / transZone
+        rawPos = t * (SLOT_COUNT - 1)
       }
 
       const slotIdx = Math.min(SLOT_COUNT - 1, Math.floor(rawPos))
       const slotFrac = rawPos - slotIdx
-      const snapT = smoothstep(0.82, 1.0, slotFrac) // hold 82%, transition 18%
+      const snapT = smoothstep(0.82, 1.0, slotFrac)
       const displayIdx = slotIdx + snapT
 
-      // Offset by -π/2 so slot 0 places Card 0 at world z=+r (camera-facing).
       const snapRotation =
         displayIdx * ((Math.PI * 2) / SLOT_COUNT) - Math.PI / 2
       groupRef.current.rotation.y = snapRotation
@@ -190,20 +244,18 @@ export function WorkOrbit() {
     }
   })
 
-  const shouldMountVideos = progress > 0.46
-
   return (
     <group ref={groupRef} position={[0, 0, 0]}>
       {caseStudies.map((study, i) => {
         const baseAngle = (i / caseStudies.length) * Math.PI * 2
         const x = Math.cos(baseAngle) * ORBIT_RADIUS
         const z = Math.sin(baseAngle) * ORBIT_RADIUS
+        const binding = videoPool ? videoPool[i] : null
         return (
           <AnglingCard
             key={study.id}
-            study={study}
             index={i}
-            shouldPlay={shouldMountVideos}
+            binding={binding}
             baseAngle={baseAngle}
             x={x}
             z={z}
@@ -217,9 +269,8 @@ export function WorkOrbit() {
 }
 
 interface AnglingCardProps {
-  study: (typeof caseStudies)[number]
   index: number
-  shouldPlay: boolean
+  binding: VideoBinding | null
   baseAngle: number
   x: number
   z: number
@@ -228,9 +279,8 @@ interface AnglingCardProps {
 }
 
 function AnglingCard({
-  study,
   index,
-  shouldPlay,
+  binding,
   baseAngle,
   x,
   z,
@@ -242,8 +292,6 @@ function AnglingCard({
   const groupRef = useRef<THREE.Group>(null!)
 
   useFrame(() => {
-    // Frontness uses (baseAngle - rot) to match actual world z after Y-rotation
-    // (positive rot takes +X toward -Z in Three.js).
     const worldAngle = baseAngle - currentRotationRef.current
     const f = (Math.sin(worldAngle) + 1) * 0.5
     setFrontness(f)
@@ -256,12 +304,7 @@ function AnglingCard({
 
   return (
     <group position={[x, 0, z]} ref={groupRef}>
-      <CardMesh
-        study={study}
-        shouldPlay={shouldPlay}
-        isFeatured={isFeatured}
-        frontness={frontness}
-      />
+      <CardMesh binding={binding} isFeatured={isFeatured} frontness={frontness} />
     </group>
   )
 }

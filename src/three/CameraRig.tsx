@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../lib/store'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * Scroll-bound cinematic camera — v3.
@@ -100,6 +101,7 @@ function getCameraAtProgress(progress: number): {
 export function CameraRig() {
   const { camera } = useThree()
   const scrollProgress = useAppStore((s) => s.scrollProgress)
+  const { isMobile } = useViewport()
 
   const lookAtTarget = useRef(new THREE.Vector3())
   const desiredPos = useRef(new THREE.Vector3())
@@ -130,6 +132,12 @@ export function CameraRig() {
     mouseSmoothed.current.y = lerp(mouseSmoothed.current.y, mouseTarget.current.y, 0.045)
 
     desiredPos.current.copy(position)
+    // On narrow viewports the camera frustum is much narrower — panels +
+    // cards clip the edges. Pull the camera back ~30% and widen FOV so
+    // orbital content stays inside the visible frame.
+    if (isMobile) {
+      desiredPos.current.z *= 1.35
+    }
     // Autopilot drift (existing) — keeps the camera breathing when idle.
     desiredPos.current.x += Math.sin(t * 0.13) * 0.08
     desiredPos.current.y += Math.cos(t * 0.11) * 0.05
@@ -153,7 +161,10 @@ export function CameraRig() {
 
     if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
       const cam = camera as THREE.PerspectiveCamera
-      cam.fov = lerp(cam.fov, fov, 0.1)
+      // Mobile: widen FOV by ~6° so the same 3D content fits in portrait
+      // aspect without being awkwardly close.
+      const targetFov = isMobile ? fov + 6 : fov
+      cam.fov = lerp(cam.fov, targetFov, 0.1)
       cam.updateProjectionMatrix()
     }
   })

@@ -1,15 +1,22 @@
 import { useAppStore } from '../lib/store'
 import { smoothFade } from '../lib/copy'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * Footer visible only when scrolled deep into Act 5. Two London addresses,
  * contact email, social icons, copyright line — agency-site convention.
+ *
+ * On mobile the survey card takes the full viewport so there's no room for
+ * a dedicated footer region. Skip the footer entirely there — the form
+ * already contains the email via the "Received" state, and Nav gives back
+ * a path up. Desktop/tablet keep the full footer.
  */
 export function Footer() {
   const progress = useAppStore((s) => s.scrollProgress)
+  const { isMobile } = useViewport()
   // Fade in slightly after contact form appears; stays until page end
   const opacity = smoothFade(progress, 0.9, 0.95, 1.01, 1.02)
-  if (opacity <= 0.001) return null
+  if (opacity <= 0.001 || isMobile) return null
 
   return (
     <footer

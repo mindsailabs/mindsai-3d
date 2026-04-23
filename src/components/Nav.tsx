@@ -15,10 +15,10 @@ export function Nav() {
   }
 
   return (
-    <nav className="fixed top-5 right-5 md:top-6 md:right-8 z-30 pointer-events-auto">
-      <div className="flex items-center gap-1 px-4 py-2 rounded-full border border-white/15 bg-black/30 backdrop-blur-md">
+    <nav className="fixed top-4 right-4 md:top-6 md:right-8 z-30 pointer-events-auto">
+      <div className="flex items-center gap-0.5 md:gap-1 px-2.5 md:px-4 py-1.5 md:py-2 rounded-full border border-white/15 bg-black/30 backdrop-blur-md">
         <NavLink label="Work" onClick={() => scrollTo(0.68)} />
-        <div className="w-6 h-px bg-white/15" />
+        <div className="w-3 md:w-6 h-px bg-white/15" />
         <NavLink label="Contact" onClick={() => scrollTo(0.95)} />
       </div>
     </nav>
@@ -34,7 +34,7 @@ function NavLink({ label, onClick }: NavLinkProps) {
   return (
     <button
       onClick={onClick}
-      className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] font-medium text-text-primary/80 hover:text-brand-teal px-2 py-1 transition-colors duration-300"
+      className="text-[9px] md:text-[11px] uppercase tracking-[0.15em] md:tracking-[0.2em] font-medium text-text-primary/80 hover:text-brand-teal px-1.5 md:px-2 py-1 transition-colors duration-300"
     >
       {label}
     </button>

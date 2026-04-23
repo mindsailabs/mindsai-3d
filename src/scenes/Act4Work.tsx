@@ -52,27 +52,27 @@ export function Act4Work() {
       {/* Featured-card metadata — anchored to viewport bottom centre */}
       <div
         key={study.id}
-        className="absolute bottom-[10vh] left-0 right-0 flex flex-col items-center text-center px-6"
+        className="absolute bottom-[8vh] md:bottom-[10vh] left-0 right-0 flex flex-col items-center text-center px-4 md:px-6"
         style={{
           animation: 'fadeUp 500ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }}
       >
-        <div className="flex items-center gap-3 mb-2">
-          <div className="text-brand-teal text-[10px] uppercase tracking-[0.3em] font-medium">
+        <div className="flex items-center gap-2 md:gap-3 mb-2">
+          <div className="text-brand-teal text-[9px] md:text-[10px] uppercase tracking-[0.25em] md:tracking-[0.3em] font-medium">
             {study.service}
           </div>
-          <div className="w-4 h-px bg-text-secondary/30" />
-          <div className="text-text-secondary text-[10px] uppercase tracking-[0.25em]">
+          <div className="w-3 md:w-4 h-px bg-text-secondary/30" />
+          <div className="text-text-secondary text-[9px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-[0.25em]">
             {study.period}
           </div>
         </div>
-        <h3 className="text-text-primary text-[clamp(1.75rem,3.2vw,2.75rem)] font-black tracking-tight md:tracking-tightest leading-tight">
+        <h3 className="text-text-primary text-[clamp(1.5rem,3.2vw,2.75rem)] font-black tracking-tight md:tracking-tightest leading-tight">
           {study.name}
         </h3>
-        <div className="text-text-secondary text-[12px] md:text-[13px] mt-1">
+        <div className="text-text-secondary text-[11px] md:text-[13px] mt-1 max-w-[90vw]">
           {study.industry}
         </div>
-        <div className="text-text-primary/90 text-[14px] md:text-[15px] mt-2 max-w-xl">
+        <div className="text-text-primary/90 text-[12px] md:text-[15px] mt-2 max-w-[92vw] md:max-w-xl leading-snug">
           {study.metric}
         </div>
         <div className="mt-4 flex items-center gap-2 text-[9px] uppercase tracking-[0.3em] text-text-secondary/60">
