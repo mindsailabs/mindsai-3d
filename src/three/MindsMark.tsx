@@ -48,6 +48,7 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
   hdr.mapping = THREE.EquirectangularReflectionMapping
 
   const scrollProgress = useAppStore((s) => s.scrollProgress)
+  const formSubmitted = useAppStore((s) => s.formSubmitted)
   const { numeric: seedNumeric } = useSessionSeed()
 
   const groupRef = useRef<THREE.Group>(null!)
@@ -109,6 +110,11 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
   const hoverSpike = useRef(0)
   const hoverTarget = useRef(0)
 
+  // Submit pulse — a big one-shot spike when the contact form submits. The
+  // M "answers" by pumping fresnel + dispersion for ~3s, then settling.
+  const submitPulse = useRef(0)
+  const submitPulseStart = useRef<number | null>(null)
+
   useFrame((state) => {
     const t = state.clock.elapsedTime
     const sp = scrollProgress
@@ -128,11 +134,29 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
     hoverSpike.current +=
       (hoverTarget.current - hoverSpike.current) * hoverLerpRate
 
-    // Combined uniform = scroll velocity + hover bump. Hover contributes
-    // up to +0.9 on top of scroll velocity so interacting with the M feels
-    // like the orb responding to you directly.
+    // Submit pulse: when the form submits, trigger a 3-second bell curve
+    // of pump intensity. Read the elapsed time to shape it.
+    if (formSubmitted && submitPulseStart.current === null) {
+      submitPulseStart.current = t
+    } else if (!formSubmitted && submitPulseStart.current !== null) {
+      submitPulseStart.current = null
+      submitPulse.current = 0
+    }
+    if (submitPulseStart.current !== null) {
+      const dt = t - submitPulseStart.current
+      // Bell curve peaked at t=1.0s, back to ~0 at t=3.0s.
+      // Shape: 2.2 * dt * exp(-1.2 * dt^2) — fast rise, exponential decay.
+      const shape = 2.2 * dt * Math.exp(-1.2 * dt * dt)
+      submitPulse.current = Math.max(0, Math.min(2.0, shape))
+    }
+
+    // Combined uniform = scroll velocity + hover bump + submit pulse. The
+    // submit pulse is the biggest of the three so the "we received you"
+    // moment is unmistakable on the orb itself.
     const combinedVelocity =
-      smoothedVelocity.current + hoverSpike.current * 0.9
+      smoothedVelocity.current +
+      hoverSpike.current * 0.9 +
+      submitPulse.current * 1.3
 
     if (leftMatRef.current) {
       leftMatRef.current.uniforms.uTime.value = t

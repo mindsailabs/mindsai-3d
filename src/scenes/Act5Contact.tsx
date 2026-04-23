@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
+import { FormEmbers } from '../components/FormEmbers'
+import { useSessionSeed } from '../lib/useSessionSeed'
 
 /**
  * Act 5 — "Start a Project" — scroll 0.861 → 1.00
@@ -83,8 +85,10 @@ const STEPS: Step[] = [
 
 export function Act5Contact() {
   const progress = useAppStore((s) => s.scrollProgress)
+  const setFormSubmitted = useAppStore((s) => s.setFormSubmitted)
+  const submitted = useAppStore((s) => s.formSubmitted)
+  const { seed } = useSessionSeed()
   const opacity = smoothFade(progress, 0.83, 0.89, 0.99, 1.01)
-  const [submitted, setSubmitted] = useState(false)
   const [stepIdx, setStepIdx] = useState(0)
 
   const {
@@ -103,7 +107,10 @@ export function Act5Contact() {
   const onSubmit = async (data: ContactValues) => {
     console.log('[Mindsai] Contact submission', data)
     await new Promise((r) => setTimeout(r, 600))
-    setSubmitted(true)
+    // Flip the global flag — triggers FormEmbers rise + MindsMark shader
+    // pulse so the M "answers" the submission. Keeps the success state
+    // from reading as a static confirmation card.
+    setFormSubmitted(true)
   }
 
   // Advance to next step if the current step's field validates, otherwise
@@ -209,18 +216,34 @@ export function Act5Contact() {
             )}
 
             {submitted ? (
-              <div className="py-6">
+              <div
+                className="py-6"
+                style={{
+                  animation: 'receivedIn 900ms 300ms cubic-bezier(0.22, 1, 0.36, 1) both',
+                }}
+              >
                 <div className="text-brand-teal text-[10px] uppercase tracking-[0.35em] font-medium mb-3">
                   Received
                 </div>
                 <h3 className="text-text-primary font-black text-[clamp(1.75rem,3.5vw,2.5rem)] leading-[0.95] tracking-tight mb-4">
-                  We'll be in touch.
+                  We'll be the first
+                  <br />
+                  to reach back.
                 </h3>
                 <p className="text-text-secondary text-[13px] md:text-[14px] leading-relaxed">
                   Thanks, {getValues('name')?.split(' ')[0] || 'and welcome'} — we'll reply
                   within 24 hours to{' '}
                   <span className="text-text-primary">{getValues('email')}</span>.
                 </p>
+                {/* Session signature — the "it remembered you" brand tell. */}
+                <div className="mt-8 pt-5 border-t border-white/10">
+                  <div className="text-text-secondary text-[9px] uppercase tracking-[0.3em] font-medium mb-1">
+                    Your signature
+                  </div>
+                  <div className="text-brand-teal text-[13px] font-medium tabular-nums">
+                    {seed}
+                  </div>
+                </div>
               </div>
             ) : (
               <form
@@ -370,7 +393,24 @@ export function Act5Contact() {
             filter: blur(0);
           }
         }
+        @keyframes receivedIn {
+          from {
+            opacity: 0;
+            transform: translateY(18px) scale(0.98);
+            filter: blur(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+          }
+        }
       `}</style>
+
+      {/* Embers rise toward the M when the form has submitted. Renders
+          OUTSIDE the main card wrapper so particles can travel across
+          the whole viewport without being clipped by card overflow. */}
+      {submitted && <FormEmbers />}
     </div>
   )
 }

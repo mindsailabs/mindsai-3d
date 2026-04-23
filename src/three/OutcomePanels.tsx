@@ -282,9 +282,15 @@ function AnglingPanel({
   // useFrame — we don't render it, so we skip the value from destructuring
   // to keep TS strict-mode happy.
   const [, setFrontness] = useState(0)
+  // Emerge group wraps the Billboard. Its position lerps from (0,0,0) to the
+  // panel's orbital target over a per-panel staggered window early in Act 2,
+  // so the panels visibly FLY OUT FROM THE M'S CENTRE rather than appearing
+  // already-in-position. Panel scale also ramps 0→1 across the same window.
+  const emergeGroupRef = useRef<THREE.Group>(null!)
   const panelScaleRef = useRef<THREE.Group>(null!)
   const image = useHtmlImage(bgSrc)
   const texture = useCompositeTexture(image, index, title, description)
+  const progress = useAppStore((s) => s.scrollProgress)
 
   const panelMat = useMemo(() => {
     if (!texture) return null
@@ -309,44 +315,76 @@ function AnglingPanel({
   }, [])
 
   useFrame(() => {
+    // ─── Emergence animation ──────────────────────────────────────────
+    // Each panel has its own tiny scroll window. Panel 0 emerges first,
+    // panel 3 last. Stagger = 0.012 scroll units between panels; each
+    // takes ~0.04 scroll units to fully emerge. Total window =
+    // 0.127 (Act 2 start) → 0.127 + 3·0.012 + 0.04 = 0.203 (~40% into
+    // Act 2). After that it's full orbit as before.
+    const emergeStart = 0.127 + index * 0.012
+    const emergeEnd = emergeStart + 0.05
+    const rawEmerge = Math.max(
+      0,
+      Math.min(1, (progress - emergeStart) / (emergeEnd - emergeStart))
+    )
+    // Smooth the ramp so panels don't snap at window edges.
+    const emergenceT = rawEmerge * rawEmerge * (3 - 2 * rawEmerge)
+
+    if (emergeGroupRef.current) {
+      emergeGroupRef.current.position.x = position[0] * emergenceT
+      emergeGroupRef.current.position.z = position[2] * emergenceT
+      emergeGroupRef.current.scale.setScalar(emergenceT)
+    }
+
+    // ─── Frontness (for orbital featured / ghost scaling) ─────────────
     // Frontness matches actual world z after group rotation:
-    //   z' = r sin(baseAngle - rot)    (see OutcomePanels useFrame notes)
+    //   z' = r sin(baseAngle - rot)
     // Max at baseAngle - rot = π/2 → panel faces camera.
     const worldAngle = baseAngle - currentRotationRef.current
     const f = (Math.sin(worldAngle) + 1) * 0.5
     setFrontness(f)
 
     if (panelScaleRef.current) {
-      // Featured panel scales up dominantly, back panels shrink so they don't
-      // compete with the front for attention.
       const s = 0.35 + Math.pow(f, 1.4) * 0.9
       panelScaleRef.current.scale.setScalar(s)
     }
 
-    // Fade back-side panels so their text doesn't read through the front.
-    // Billboarded planes always face camera, so the only way to visually
-    // "hide" the back panel is to make it nearly invisible.
+    // Panels fade back-to-invisible via opacity, but during emergence
+    // we need the panel to be visible at all EMERGENCE values (not just
+    // when front-facing) — otherwise newly-emerging panels are invisible
+    // because they start at baseAngle that may not face camera. So we
+    // weight opacity by emergenceT too: during emergence the panel is
+    // visible regardless of frontness; after emergence, the normal
+    // front/back opacity applies.
+    const frontOpacity = 0.05 + Math.pow(f, 3.0) * 0.9
+    const emergenceOpacity = Math.min(
+      1,
+      emergenceT + frontOpacity
+    )
+
     if (panelMat) {
-      panelMat.opacity = 0.05 + Math.pow(f, 3.0) * 0.9
+      panelMat.opacity = emergenceOpacity
     }
     if (borderMat) {
-      borderMat.opacity = Math.pow(f, 3.0) * 0.7
+      borderMat.opacity = Math.min(0.8, emergenceT * 0.6 + Math.pow(f, 3.0) * 0.7)
     }
   })
 
   if (!panelMat) return null
 
   return (
-    <Billboard position={position} follow={true}>
-      <group ref={panelScaleRef}>
-        <mesh material={panelMat}>
-          <planeGeometry args={[PANEL_WIDTH, PANEL_HEIGHT]} />
-        </mesh>
-        <lineSegments>
-          <bufferGeometry attach="geometry" {...borderGeom} />
-          <primitive object={borderMat} attach="material" />
-        </lineSegments>
-      </group>
-    </Billboard>
+    <group ref={emergeGroupRef}>
+      <Billboard follow={true}>
+        <group ref={panelScaleRef}>
+          <mesh material={panelMat}>
+            <planeGeometry args={[PANEL_WIDTH, PANEL_HEIGHT]} />
+          </mesh>
+          <lineSegments>
+            <bufferGeometry attach="geometry" {...borderGeom} />
+            <primitive object={borderMat} attach="material" />
+          </lineSegments>
+        </group>
+      </Billboard>
+    </group>
   )
 }

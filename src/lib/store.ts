@@ -16,6 +16,11 @@ interface AppState {
    *  the opening shot. */
   appReady: boolean
   setAppReady: (r: boolean) => void
+  /** Flipped to true when the contact form submits successfully. The M
+   *  shader reads this to trigger a brightness/velocity pulse, and the
+   *  FormEmbers overlay reads it to spawn the particle-rise sequence. */
+  formSubmitted: boolean
+  setFormSubmitted: (r: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -31,4 +36,6 @@ export const useAppStore = create<AppState>((set) => ({
   setFeaturedOutcome: (i) => set({ featuredOutcome: i }),
   appReady: false,
   setAppReady: (r) => set({ appReady: r }),
+  formSubmitted: false,
+  setFormSubmitted: (r) => set({ formSubmitted: r }),
 }))
