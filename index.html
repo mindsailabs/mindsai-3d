@@ -29,6 +29,26 @@
 
     <link rel="preconnect" href="https://api.fontshare.com" />
     <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
+
+    <!-- Preload critical first-paint assets in parallel with the JS bundle.
+         Without these, the HDRI + atmosphere video start fetching only
+         when React mounts the MindsMark / SharedLayout components, which
+         means the M briefly renders matte-gray before HDRI reflections
+         load and the background is black before the video loop plays.
+         Preload jumps the fetch ahead, so by the time React mounts,
+         these are already in the browser cache. -->
+    <link
+      rel="preload"
+      as="fetch"
+      href="/assets/hdri/brown_photostudio_01_2k.hdr"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      as="video"
+      href="/assets/atmosphere_loop.mp4"
+      type="video/mp4"
+    />
     <!-- Fontshare CSS with display=block: brief FOIT while Satoshi loads,
          then shows crisp. Beats display=swap here because the alternative is
          a visible reflow/metric-shift mid-page when Satoshi replaces the

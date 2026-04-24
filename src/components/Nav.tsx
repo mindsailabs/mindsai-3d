@@ -1,6 +1,31 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 /**
+ * Route prefetch — trigger the dynamic import for a lazy-loaded route
+ * as soon as the user shows intent (hover / focus on its nav link). By
+ * the time they click, the chunk is in the browser cache and the page
+ * transition has zero fetch latency.
+ *
+ * Each entry matches one of the lazy routes defined in App.tsx.
+ */
+const routePrefetch: Record<string, () => Promise<unknown>> = {
+  '/manifesto': () => import('../pages/Manifesto'),
+  '/process': () => import('../pages/Process'),
+}
+const prefetched = new Set<string>()
+function prefetchRoute(to: string) {
+  if (prefetched.has(to)) return
+  const fn = routePrefetch[to]
+  if (fn) {
+    prefetched.add(to)
+    fn().catch(() => {
+      // Fetch failed (offline, CSP, etc.) — allow retry on next hover.
+      prefetched.delete(to)
+    })
+  }
+}
+
+/**
  * Persistent nav capsule top-right + NavLogo top-left.
  *
  * Work / Contact remain scroll targets INSIDE the home route. If the user
@@ -83,7 +108,13 @@ function NavButton({ label, onClick, asLink, to }: NavButtonProps) {
     "after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3 md:after:inset-0"
   if (asLink && to) {
     return (
-      <Link to={to} className={className}>
+      <Link
+        to={to}
+        className={className}
+        onMouseEnter={() => prefetchRoute(to)}
+        onFocus={() => prefetchRoute(to)}
+        onTouchStart={() => prefetchRoute(to)}
+      >
         {label}
       </Link>
     )

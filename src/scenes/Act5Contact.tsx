@@ -218,6 +218,8 @@ export function Act5Contact() {
             {submitted ? (
               <div
                 className="py-6"
+                role="status"
+                aria-live="polite"
                 style={{
                   animation: 'receivedIn 900ms 300ms cubic-bezier(0.22, 1, 0.36, 1) both',
                 }}
@@ -337,9 +339,18 @@ export function Act5Contact() {
                     </div>
                   )}
 
-                  {/* Error message */}
+                  {/* Error message — aria-live announces to screen readers
+                      the moment zod validation surfaces an error, without
+                      the user needing to re-submit. role="alert" polite
+                      vs assertive — assertive feels too urgent for form
+                      validation, polite lets the SR finish the current
+                      announcement first. */}
                   {errors[currentStep.field] && (
-                    <div className="text-[12px] text-brand-teal/80">
+                    <div
+                      className="text-[12px] text-brand-teal/80"
+                      role="alert"
+                      aria-live="polite"
+                    >
                       {errors[currentStep.field]?.message}
                     </div>
                   )}
