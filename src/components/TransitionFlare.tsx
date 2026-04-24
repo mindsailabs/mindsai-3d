@@ -1,4 +1,5 @@
 import { useAppStore } from '../lib/store'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * TransitionFlare — the VFX bridge between acts.
@@ -35,6 +36,12 @@ const FLARE_WIDTH = 0.028
 
 export function TransitionFlare() {
   const sp = useAppStore((s) => s.scrollProgress)
+  const reducedMotion = useReducedMotion()
+
+  // Reduced motion: the bright teal bursts + lens streaks can trigger
+  // photosensitive migraines + vestibular symptoms. Suppress the
+  // entire flare system — transitions between acts happen silently.
+  if (reducedMotion) return null
 
   // Gaussian peak at each PUSH scroll. Take the max over all peaks —
   // no two are close enough to overlap at meaningful intensity.

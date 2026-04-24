@@ -5,6 +5,7 @@ import { useMemo, useRef } from 'react'
 import { vertexShader, fragmentShader } from './orbShaders'
 import { useAppStore } from '../lib/store'
 import { useSessionSeed } from '../lib/useSessionSeed'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * MindsAI mark — the narrative spine.
@@ -51,6 +52,7 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
   const scrollProgress = useAppStore((s) => s.scrollProgress)
   const formSubmitted = useAppStore((s) => s.formSubmitted)
   const { numeric: seedNumeric } = useSessionSeed()
+  const reducedMotion = useReducedMotion()
 
   const groupRef = useRef<THREE.Group>(null!)
   const innerRef = useRef<THREE.Group>(null!)
@@ -272,9 +274,11 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
       // Oscillating sway. swayDamp squeezes amplitude in Acts 3/4/5 so
       // the M's character shifts from "restless glass" in Act 1/2 to
       // "focused" (3) → "withdrawn" (4) → "monument stillness" (5).
-      innerRef.current.rotation.y = Math.sin(t * 0.35) * 0.55 * swayDamp
-      innerRef.current.rotation.x = Math.sin(t * 0.22) * 0.09 * swayDamp
-      innerRef.current.rotation.z = Math.sin(t * 0.15) * 0.03 * swayDamp
+      // Reduced motion: zero sway — the M is a still portrait.
+      const swayScale = reducedMotion ? 0 : swayDamp
+      innerRef.current.rotation.y = Math.sin(t * 0.35) * 0.55 * swayScale
+      innerRef.current.rotation.x = Math.sin(t * 0.22) * 0.09 * swayScale
+      innerRef.current.rotation.z = Math.sin(t * 0.15) * 0.03 * swayScale
     }
 
     if (groupRef.current) {

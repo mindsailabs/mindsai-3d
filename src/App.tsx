@@ -46,6 +46,13 @@ export default function App() {
 function SharedLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      {/* Skip-to-content link — first focusable element on the page.
+          Lets keyboard + screen-reader users bypass the 3D scene and
+          jump straight to the main content region. */}
+      <a href="#main-content" className="skip-to-content">
+        Skip to content
+      </a>
+
       {/* Atmospheric video layer — Veo-3.1-generated seamless loop of
           drifting teal light strata + particles. Sits BEHIND every page's
           WebGL canvas. Covers the whole viewport with object-fit:cover. */}
@@ -70,7 +77,7 @@ function SharedLayout({ children }: { children: React.ReactNode }) {
         />
       </div>
 
-      {children}
+      <main id="main-content">{children}</main>
 
       {/* Opening veil — first load only (session-scoped in OpeningFade) */}
       <OpeningFade />

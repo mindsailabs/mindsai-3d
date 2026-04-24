@@ -39,7 +39,10 @@ export function Nav() {
   }
 
   return (
-    <nav className="fixed top-4 right-2 md:top-6 md:right-8 z-30 pointer-events-auto">
+    <nav
+      aria-label="Primary"
+      className="fixed top-4 right-2 md:top-6 md:right-8 z-30 pointer-events-auto"
+    >
       <div className="flex items-center gap-0 md:gap-1 px-1.5 md:px-4 py-1.5 md:py-2 rounded-full border border-white/15 bg-black/30 backdrop-blur-md">
         <NavButton label="Work" onClick={() => go(0.68)} />
         <NavDivider />
@@ -111,6 +114,7 @@ export function NavLogo() {
     <a
       href="/"
       onClick={handleClick}
+      aria-label="MindsAI Media — return home"
       className="fixed top-5 left-5 md:top-6 md:left-8 z-30 pointer-events-auto text-text-primary font-black text-[13px] tracking-tight"
     >
       Minds<span className="text-brand-teal">AI</span>

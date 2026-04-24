@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../lib/store'
 import { useViewport } from '../lib/useViewport'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * Scroll-bound cinematic camera — v5 (face-zoom transitions).
@@ -162,6 +163,7 @@ export function CameraRig() {
   const { camera } = useThree()
   const scrollProgress = useAppStore((s) => s.scrollProgress)
   const { isMobile } = useViewport()
+  const reducedMotion = useReducedMotion()
 
   const lookAtTarget = useRef(new THREE.Vector3())
   const desiredPos = useRef(new THREE.Vector3())
@@ -204,6 +206,24 @@ export function CameraRig() {
 
     if (isMobile) {
       desiredPos.current.z *= 1.35
+    }
+
+    // Reduced motion: park the camera at a safe framing (Act 3
+    // settled — sees the M + planets together) with zero drift.
+    // No push frames, no scroll-driven dolly, nothing that can cause
+    // motion sickness.
+    if (reducedMotion) {
+      desiredPos.current.set(0, 0.3, isMobile ? 10.0 : 7.8)
+      lookAtTarget.current.set(0, 0.2, 0)
+      camera.position.lerp(desiredPos.current, 0.2)
+      camera.lookAt(lookAtTarget.current)
+      if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+        const pc = camera as THREE.PerspectiveCamera
+        const targetFov = isMobile ? 42 : 36
+        pc.fov = lerp(pc.fov, targetFov, 0.2)
+        pc.updateProjectionMatrix()
+      }
+      return
     }
 
     // Scroll velocity (absolute). Lenis exposes raw velocity in px/frame

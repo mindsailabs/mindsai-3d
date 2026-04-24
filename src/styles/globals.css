@@ -36,6 +36,47 @@
     box-sizing: border-box;
   }
 
+  /* Focus-visible — keyboard users get a visible brand-teal ring on
+     every focusable element. We strip the default browser outline only
+     from elements that already style their own focus state (form
+     inputs with border-color change); everything else gets this.
+     Using :focus-visible so mouse clicks don't flash the ring. */
+  *:focus-visible {
+    outline: 2px solid rgba(115, 197, 204, 0.85);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+  /* Form inputs opt into brand-consistent focus via border-color
+     change; suppress the outline ring there only. */
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+  }
+
+  /* Skip-to-content link — invisible until keyboard-focused, then
+     jumps sighted keyboard users + screen readers past the 3D scene
+     straight to main content. */
+  .skip-to-content {
+    position: fixed;
+    top: -100px;
+    left: 8px;
+    z-index: 100;
+    padding: 10px 16px;
+    background: var(--bg-black);
+    color: var(--brand-teal);
+    border: 1px solid rgba(115, 197, 204, 0.55);
+    border-radius: 3px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 500;
+    transition: top 200ms ease;
+  }
+  .skip-to-content:focus-visible {
+    top: 12px;
+  }
+
   /* iOS Safari address-bar robustness — override Tailwind's h-screen /
      min-h-screen to use `dvh` (dynamic viewport height) on supporting
      browsers. Standard `100vh` on iOS Safari reports the LARGER viewport
