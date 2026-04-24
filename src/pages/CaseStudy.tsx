@@ -9,6 +9,7 @@ import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
 import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * /work/:id — dedicated case-study page.
@@ -133,7 +134,7 @@ export function CaseStudy() {
     <>
       <div className="fixed inset-0 z-[1]">
         <Canvas
-          camera={{ position: [0, 0.1, 7.5], fov: 32 }}
+          camera={{ position: [0, 0.1, 7.5], fov: 32, near: 0.5, far: 60 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -141,7 +142,7 @@ export function CaseStudy() {
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
-          dpr={[1, 3]}
+          dpr={[1, 2]}
         >
           <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
@@ -399,6 +400,7 @@ function NarrativeBlock({
 function CaseStudyCamera() {
   const mouse = useRef({ x: 0, y: 0 })
   const mouseSmoothed = useRef({ x: 0, y: 0 })
+  const { isMobile } = useViewport()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -417,13 +419,19 @@ function CaseStudyCamera() {
       (mouse.current.y - mouseSmoothed.current.y) * 0.04
 
     const yaw = Math.sin(t * 0.06) * 0.12 + mouseSmoothed.current.x * 0.15
-    const orbitRadius = 7.5
+    const orbitRadius = isMobile ? 10.5 : 7.5
     const cam = state.camera
     cam.position.x = Math.sin(yaw) * orbitRadius
     cam.position.y =
       0.2 + Math.cos(t * 0.05) * 0.08 + mouseSmoothed.current.y * 0.25
     cam.position.z = Math.cos(yaw) * orbitRadius
     cam.lookAt(0, mouseSmoothed.current.y * 0.04, 0)
+    if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const target = isMobile ? 40 : 32
+      const pc = cam as THREE.PerspectiveCamera
+      pc.fov += (target - pc.fov) * 0.18
+      pc.updateProjectionMatrix()
+    }
   })
 
   return null

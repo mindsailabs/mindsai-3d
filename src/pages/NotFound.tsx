@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { MindsMark } from '../three/MindsMark'
 import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * /404 — the void page.
@@ -29,7 +30,7 @@ export function NotFound() {
     <>
       <div className="fixed inset-0 z-[1]">
         <Canvas
-          camera={{ position: [0, 0.1, 7.5], fov: 32 }}
+          camera={{ position: [0, 0.1, 7.5], fov: 32, near: 0.5, far: 60 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -37,7 +38,7 @@ export function NotFound() {
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
-          dpr={[1, 3]}
+          dpr={[1, 2]}
         >
           <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
@@ -240,6 +241,7 @@ function ShardRings() {
 function LostCamera() {
   const cursor = useRef({ x: 0, y: 0 })
   const cursorSmoothed = useRef({ x: 0, y: 0 })
+  const { isMobile } = useViewport()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -261,8 +263,15 @@ function LostCamera() {
       Math.sin(t * 0.12) * 0.6 + cursorSmoothed.current.x * 0.4
     cam.position.y =
       Math.cos(t * 0.09) * 0.3 + cursorSmoothed.current.y * 0.25
-    cam.position.z = 7.5 + Math.sin(t * 0.07) * 0.15
+    cam.position.z =
+      (isMobile ? 10.5 : 7.5) + Math.sin(t * 0.07) * 0.15
     cam.lookAt(0, 0, 0)
+    if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const target = isMobile ? 42 : 36
+      const pc = cam as THREE.PerspectiveCamera
+      pc.fov += (target - pc.fov) * 0.18
+      pc.updateProjectionMatrix()
+    }
   })
 
   return null

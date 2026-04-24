@@ -206,24 +206,37 @@ export function CameraRig() {
       desiredPos.current.z *= 1.35
     }
 
-    // Autopilot drift — kept small so the scroll position dominates
-    // motion. Halved from v4 amplitudes. On push frames (z<3.5) it's
-    // further dampened so the cinematic zoom isn't fuzzy.
+    // Scroll velocity (absolute). Lenis exposes raw velocity in px/frame
+    // equivalents (can be large). We normalise to roughly [0, 1].
+    const lenis = (
+      window as unknown as { __lenis?: { velocity?: number } }
+    ).__lenis
+    const rawVel = lenis?.velocity ?? 0
+    const velT = Math.min(1, Math.abs(rawVel) / 20)
+
+    // Autopilot drift — ONLY while user is actively scrolling. When
+    // scroll velocity is near zero the camera is ROCK-STILL at its
+    // scroll-driven target. User's complaint "first frame after
+    // transition moves too fast" came from drift + lerp catch-up
+    // continuing after the user had stopped, making settled frames feel
+    // like they were still in motion. Now settled = truly settled.
     const nearPush = desiredPos.current.z < 3.5
-    const driftAmp = nearPush ? 0.1 : 0.5
+    const baseDrift = nearPush ? 0.05 : 0.35
+    const driftAmp = baseDrift * velT
     desiredPos.current.x += Math.sin(t * 0.13) * 0.08 * driftAmp
     desiredPos.current.y += Math.cos(t * 0.11) * 0.05 * driftAmp
     desiredPos.current.z += Math.sin(t * 0.08) * 0.05 * driftAmp
 
-    // Cursor parallax also dampened near push frames.
-    const parallaxAmp = nearPush ? 0.1 : 0.7
+    // Cursor parallax — always on (feels like camera "breath" when idle)
+    // but reduced near push frames.
+    const parallaxAmp = nearPush ? 0.1 : 0.55
     desiredPos.current.x += mouseSmoothed.current.x * 0.35 * parallaxAmp
     desiredPos.current.y += mouseSmoothed.current.y * 0.2 * parallaxAmp
 
-    // Tightened from 0.14 → 0.24 so the camera tracks its scroll-driven
-    // target nearly as fast as Lenis updates scrollProgress. Net effect:
-    // scroll the wheel → camera moves immediately (no laggy "catch-up").
-    camera.position.lerp(desiredPos.current, 0.24)
+    // Velocity-coupled lerp: fast snap when user is scrolling, tight
+    // settle when they stop. 0.35 active → 0.5 at rest (snap).
+    const lerpFactor = 0.35 + (1 - velT) * 0.15
+    camera.position.lerp(desiredPos.current, lerpFactor)
 
     lookAtTarget.current.x += mouseSmoothed.current.x * 0.12 * parallaxAmp
     lookAtTarget.current.y += mouseSmoothed.current.y * 0.08 * parallaxAmp

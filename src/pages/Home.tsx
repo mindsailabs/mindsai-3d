@@ -93,7 +93,7 @@ export function Home() {
           or none at all. */}
       <div className="fixed inset-0 z-[1]">
         <Canvas
-          camera={{ position: [0, 0.1, 7.5], fov: 32 }}
+          camera={{ position: [0, 0.1, 7.5], fov: 32, near: 0.5, far: 60 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -101,7 +101,7 @@ export function Home() {
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
-          dpr={[1, 3]}
+          dpr={[1, 2]}
         >
           <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>

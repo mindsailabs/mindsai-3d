@@ -36,6 +36,30 @@
     box-sizing: border-box;
   }
 
+  /* iOS Safari address-bar robustness — override Tailwind's h-screen /
+     min-h-screen to use `dvh` (dynamic viewport height) on supporting
+     browsers. Standard `100vh` on iOS Safari reports the LARGER viewport
+     (toolbar retracted) even when the toolbar is visible, so hero
+     sections overflow the visible area and the canvas snaps violently
+     when the toolbar collapses on scroll. `100dvh` adapts smoothly.
+
+     Scroll spacers like h-[150vh] on Home intentionally exceed one
+     viewport height and don't use these classes, so they're unaffected. */
+  @supports (height: 100dvh) {
+    .h-screen {
+      height: 100dvh;
+    }
+    .min-h-screen {
+      min-height: 100dvh;
+    }
+    /* Canvas wrappers use `fixed inset-0` which positions to viewport
+       edges — on most browsers this is already dvh-equivalent, but
+       enforce explicitly so iOS doesn't oversize the 3D buffer. */
+    .fixed.inset-0 {
+      height: 100dvh;
+    }
+  }
+
   /* Contact-form input styling — subtle inset field with brand teal focus ring */
   .field {
     width: 100%;

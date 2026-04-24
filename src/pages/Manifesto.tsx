@@ -8,6 +8,7 @@ import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
 import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * /manifesto — the philosophical thesis page.
@@ -142,7 +143,7 @@ export function Manifesto() {
     <>
       <div className="fixed inset-0 z-[1]">
         <Canvas
-          camera={{ position: [0, 0.1, 7.5], fov: 32 }}
+          camera={{ position: [0, 0.1, 7.5], fov: 32, near: 0.5, far: 60 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -150,7 +151,7 @@ export function Manifesto() {
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
-          dpr={[1, 3]}
+          dpr={[1, 2]}
         >
           <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
@@ -307,11 +308,15 @@ function StanzaSection({
  * Manifesto camera — very slow drift with a gentle scroll-driven yaw
  * sweep so each stanza sees a slightly different facet of the M and its
  * orbital rings. No dramatic dolly.
+ *
+ * Mobile: pulls back 1.4× and widens FOV by 8° so the M fits inside the
+ * portrait viewport without dominating the composition.
  */
 function ManifestoCamera() {
   const mouse = useRef({ x: 0, y: 0 })
   const mouseSmoothed = useRef({ x: 0, y: 0 })
   const scrollProgress = useAppStore((s) => s.scrollProgress)
+  const { isMobile } = useViewport()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -331,7 +336,7 @@ function ManifestoCamera() {
 
     const sp = scrollProgress
     const yaw = sp * 0.5 + Math.sin(t * 0.07) * 0.05 // gentle 30° sweep
-    const orbitRadius = 7.5
+    const orbitRadius = isMobile ? 10.5 : 7.5
     const camX =
       Math.sin(yaw) * orbitRadius + mouseSmoothed.current.x * 0.3
     const camZ = Math.cos(yaw) * orbitRadius
@@ -341,6 +346,13 @@ function ManifestoCamera() {
     const cam = state.camera
     cam.position.set(camX, camY, camZ)
     cam.lookAt(0, mouseSmoothed.current.y * 0.04, 0)
+    // Widen FOV on mobile for a more generous field.
+    if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const target = isMobile ? 40 : 32
+      const pc = cam as THREE.PerspectiveCamera
+      pc.fov += (target - pc.fov) * 0.18
+      pc.updateProjectionMatrix()
+    }
   })
 
   return null

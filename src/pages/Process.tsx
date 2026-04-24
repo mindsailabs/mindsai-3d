@@ -9,6 +9,7 @@ import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
 import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
+import { useViewport } from '../lib/useViewport'
 
 /**
  * /process — the apparatus around the mark.
@@ -136,7 +137,7 @@ export function Process() {
           drifts slowly around Y, giving the whole system a gentle parallax. */}
       <div className="fixed inset-0 z-[1]">
         <Canvas
-          camera={{ position: [0, 0.1, 7.5], fov: 32 }}
+          camera={{ position: [0, 0.1, 7.5], fov: 32, near: 0.5, far: 60 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -144,7 +145,7 @@ export function Process() {
             toneMapping: THREE.ACESFilmicToneMapping,
             toneMappingExposure: 1.0,
           }}
-          dpr={[1, 3]}
+          dpr={[1, 2]}
         >
           <fog attach="fog" args={['#000000', 9, 26]} />
           <Suspense fallback={null}>
@@ -312,6 +313,7 @@ function ProcessCamera() {
   const mouse = useRef({ x: 0, y: 0 })
   const mouseSmoothed = useRef({ x: 0, y: 0 })
   const scrollProgress = useAppStore((s) => s.scrollProgress)
+  const { isMobile } = useViewport()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -333,7 +335,9 @@ function ProcessCamera() {
 
     // Yaw sweep from 0 to ~1.05 rad (~60°) as you scroll.
     const yaw = sp * 1.05 + Math.sin(t * 0.08) * 0.04
-    const orbitRadius = 7.5 - sp * 0.8 // also dolly in slightly
+    // Mobile: pull back so the M + orbital rings fit portrait.
+    const baseRadius = isMobile ? 10.5 : 7.5
+    const orbitRadius = baseRadius - sp * 0.8
     const camX =
       Math.sin(yaw) * orbitRadius + mouseSmoothed.current.x * 0.35
     const camZ = Math.cos(yaw) * orbitRadius
@@ -343,6 +347,13 @@ function ProcessCamera() {
     const cam = state.camera
     cam.position.set(camX, camY, camZ)
     cam.lookAt(0, mouseSmoothed.current.y * 0.05, 0)
+    // Widen FOV on mobile for a more generous field.
+    if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const target = isMobile ? 40 : 32
+      const pc = cam as THREE.PerspectiveCamera
+      pc.fov += (target - pc.fov) * 0.18
+      pc.updateProjectionMatrix()
+    }
   })
 
   return null
