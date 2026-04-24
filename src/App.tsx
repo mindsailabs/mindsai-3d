@@ -1,12 +1,25 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Nav, NavLogo } from './components/Nav'
 import { AudioSystem } from './components/AudioSystem'
 import { OpeningFade } from './components/OpeningFade'
 import { Home } from './pages/Home'
-import { Manifesto } from './pages/Manifesto'
-import { Process } from './pages/Process'
-import { CaseStudy } from './pages/CaseStudy'
-import { NotFound } from './pages/NotFound'
+
+// Non-home routes lazy-loaded so the initial home-page bundle doesn't
+// carry their scene graph + copy. First visit to /manifesto /process
+// /work/:id /(404) pays a small fetch; home stays tight.
+const Manifesto = lazy(() =>
+  import('./pages/Manifesto').then((m) => ({ default: m.Manifesto }))
+)
+const Process = lazy(() =>
+  import('./pages/Process').then((m) => ({ default: m.Process }))
+)
+const CaseStudy = lazy(() =>
+  import('./pages/CaseStudy').then((m) => ({ default: m.CaseStudy }))
+)
+const NotFound = lazy(() =>
+  import('./pages/NotFound').then((m) => ({ default: m.NotFound }))
+)
 
 /**
  * App is now the ROUTER shell.
@@ -31,13 +44,15 @@ export default function App() {
   return (
     <BrowserRouter>
       <SharedLayout>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/manifesto" element={<Manifesto />} />
-          <Route path="/process" element={<Process />} />
-          <Route path="/work/:id" element={<CaseStudy />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Suspense fallback={<div className="min-h-screen bg-black" />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/manifesto" element={<Manifesto />} />
+            <Route path="/process" element={<Process />} />
+            <Route path="/work/:id" element={<CaseStudy />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </SharedLayout>
     </BrowserRouter>
   )
