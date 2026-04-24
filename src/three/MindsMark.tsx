@@ -87,6 +87,10 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
       // reveal on the contact success state, creates the "it remembered
       // me" brand moment.
       uSeed: { value: seedNumeric },
+      // Near-plane fade. 1 = fully visible, 0 = invisible. Driven by
+      // camera distance in useFrame — prevents the M from clipping into
+      // the near plane during Act 1→2 and Act 3→4 push frames.
+      uOpacity: { value: 1 },
     }),
     [hdr, seedNumeric]
   )
@@ -159,9 +163,33 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
       hoverSpike.current * 0.9 +
       submitPulse.current * 1.3
 
+    // Near-plane fade: measure camera distance to the M group. When
+    // camera is very close (< 2.2 units), start fading the shader alpha
+    // so the mesh dissolves gracefully instead of clipping the near plane.
+    // Safe zone (>= 3.0): fully opaque. Fade band 3.0 → 1.2. Below 1.2 =
+    // fully invisible (camera is essentially inside the mark).
+    let nearFade = 1.0
+    if (groupRef.current) {
+      const camPos = state.camera.position
+      const markPos = groupRef.current.position
+      const dx = camPos.x - markPos.x
+      const dy = camPos.y - markPos.y
+      const dz = camPos.z - markPos.z
+      const camDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      // smoothstep(1.2, 3.0, camDistance) — fade in as camera moves away
+      const t1 = Math.max(0, Math.min(1, (camDistance - 1.2) / (3.0 - 1.2)))
+      nearFade = t1 * t1 * (3 - 2 * t1)
+    }
+
+    // Close-range premium-glass boost factor, applied to per-uniform
+    // updates below once toAct5 etc. are declared. 1 at peak push,
+    // 0 at safe distance (>= 3 units).
+    const closeRange = 1 - nearFade
+
     if (leftMatRef.current) {
       leftMatRef.current.uniforms.uTime.value = t
       leftMatRef.current.uniforms.uVelocity.value = combinedVelocity
+      leftMatRef.current.uniforms.uOpacity.value = nearFade
     }
 
     // ---- Scroll-driven choreography ----
@@ -212,15 +240,19 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
 
     // Per-act uniform tweaks for the shader. Fresnel rim dims in Act 4
     // (silhouette / withdrawn), brightens in Act 5 (monument glow).
+    // Close-range boosts (see `closeRange` above) pump reflection +
+    // iridescence + teal tint when the camera is near the M, so push
+    // frames read as luminous frosted glass instead of the flat gray
+    // that low-Fresnel at close range would otherwise produce.
     const fresnelActBias = -inAct4 * 0.55 + toAct5 * 0.6
     if (leftMatRef.current) {
-      // Base fresnel boost is 1.75 in the uniform initializer. Modulate
-      // additively here each frame so per-act biases apply live.
-      leftMatRef.current.uniforms.uFresnelBoost.value = 1.75 + fresnelActBias
-      // Iridescence gets a small Act 5 boost so the monument shimmers
-      // a hair more prominently.
+      leftMatRef.current.uniforms.uFresnelBoost.value =
+        1.75 + fresnelActBias + closeRange * 0.9
       leftMatRef.current.uniforms.uIridescenceStrength.value =
-        0.18 + toAct5 * 0.08
+        0.18 + toAct5 * 0.08 + closeRange * 0.32
+      leftMatRef.current.uniforms.uReflectionMix.value =
+        0.55 + closeRange * 0.35
+      leftMatRef.current.uniforms.uTintStrength.value = closeRange * 0.25
     }
 
     // ---- Apply transformations ----
@@ -261,6 +293,14 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
       const pulse = 1 + Math.sin(t * 1.1) * 0.14
       const act2DotBoost = 1 + inAct2 * 0.3
       dotRef.current.scale.setScalar(pulse * act2DotBoost)
+      // Match the nearFade on the dot so it dissolves in sync with the
+      // bars (otherwise a lone teal circle would hover on-screen while
+      // the M bars fade out during push frames).
+      const dm = dotRef.current.material as THREE.MeshBasicMaterial
+      if (dm) {
+        dm.transparent = true
+        dm.opacity = nearFade
+      }
     }
   })
 
@@ -288,6 +328,7 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
             vertexShader={vertexShader}
             fragmentShader={fragmentShader}
             uniforms={uniforms}
+            transparent
           />
         </mesh>
 
@@ -298,6 +339,7 @@ export function MindsMark({ scale = 1, onDotMount }: MindsMarkProps) {
             vertexShader={vertexShader}
             fragmentShader={fragmentShader}
             uniforms={uniforms}
+            transparent
           />
         </mesh>
       </group>

@@ -114,6 +114,7 @@ export const fragmentShader = /* glsl */ `
   uniform float uTime;
   uniform float uIridescenceStrength;
   uniform float uSeed;
+  uniform float uOpacity;
 
   varying vec3 vWorldNormal;
   varying vec3 vWorldPosition;
@@ -246,6 +247,9 @@ export const fragmentShader = /* glsl */ `
     float inner = smoothstep(0.0, 0.7, 1.0 - NdotV);
     color += uTint * inner * 0.25;
 
-    gl_FragColor = vec4(color, 1.0);
+    // uOpacity fades the whole mark out when the camera gets
+    // dangerously close to the geometry (prevents near-plane clipping
+    // + "hollow inside of mesh" artifacts during Act 1→2 push frames).
+    gl_FragColor = vec4(color, uOpacity);
   }
 `

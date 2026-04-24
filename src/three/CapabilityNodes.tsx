@@ -28,6 +28,10 @@ import { useViewport } from '../lib/useViewport'
  *   – Release hover, motion resumes from the same angles (no snap back).
  */
 
+// Reusable Vector3 allocated once per module so each frame's front-bias
+// calculation doesn't allocate 7 new Vector3s (one per planet).
+const _tmpWorldPos = new THREE.Vector3()
+
 interface PlanetOrbit {
   radius: number
   speed: number // rad/sec
@@ -128,7 +132,13 @@ function CapabilityPlanet({
   const nodeRef = useRef<THREE.Mesh>(null!)
   const glowRef = useRef<THREE.Mesh>(null!)
   const cardRef = useRef<THREE.Group>(null!)
+  const labelRef = useRef<THREE.Group>(null!)
   const angleRef = useRef(orbit.phase)
+  // Smoothed front-bias — 1 when planet is between camera and origin,
+  // 0 when behind origin (on the far side of the M). Drives label
+  // opacity so back-side labels fade, preventing the mid-screen clutter
+  // where front + back labels stack at similar screen positions.
+  const frontBias = useRef(1)
 
   const isHovered = hoveredIndex === index
   const anyHovered = hoveredIndex !== null
@@ -183,6 +193,29 @@ function CapabilityPlanet({
       planetRef.current.position.set(px, py, pz)
     }
 
+    // Front-bias: measure this planet's world-space Z relative to the
+    // camera. Planets with world-Z closer to the camera (pz > 0 in the
+    // orbit's local frame, but accounting for the parent group rotation)
+    // are "in front" and should show labels. Back-side planets fade.
+    {
+      const worldPos = planetRef.current
+        ? planetRef.current.getWorldPosition(_tmpWorldPos)
+        : null
+      if (worldPos) {
+        const camZ = state.camera.position.z
+        // Planets closer to camera (larger worldPos.z assuming camera at
+        // positive z) get higher frontness. Normalise by orbit radius.
+        const zFromCam = camZ - worldPos.z
+        // frontness = 1 when planet is ~halfway between camera and origin,
+        // 0 when planet is on the far side (beyond origin from camera).
+        const normalized = Math.max(
+          0,
+          Math.min(1, 1 - (zFromCam - camZ * 0.3) / (camZ * 0.9))
+        )
+        frontBias.current += (normalized - frontBias.current) * 0.08
+      }
+    }
+
     // Scale / dim lerp.
     const targetScale = isHovered ? 2.2 : isDimmed ? 0.7 : 1.0
     const current = nodeRef.current
@@ -221,6 +254,28 @@ function CapabilityPlanet({
         }
       })
     }
+
+    // Apply frontBias to the always-visible label group so back-side
+    // planets fade to near-invisible, clearing the visual clutter at
+    // the middle of the screen where 2-3 labels would otherwise stack.
+    if (labelRef.current) {
+      // When hovered, the card takes over — don't fight it with the label.
+      const labelTarget = isHovered
+        ? 0
+        : isDimmed
+        ? 0.15
+        : Math.pow(frontBias.current, 1.8)
+      labelRef.current.traverse((obj) => {
+        const mat = (obj as unknown as { material?: THREE.Material }).material
+        if (mat && 'opacity' in mat) {
+          const m = mat as THREE.Material & { opacity: number }
+          // Multiply through: label's own material-opacity * frontBias.
+          // Base material-opacity is set to 1.0 on Text JSX below so
+          // this becomes the single source of truth for label opacity.
+          m.opacity = m.opacity + (labelTarget - m.opacity) * 0.16
+        }
+      })
+    }
   })
 
   // Card positions to the RIGHT of the planet on even indices, LEFT on
@@ -253,10 +308,11 @@ function CapabilityPlanet({
 
       {/* Always-visible planet label — code + short title stacked so
           users can read WHICH capability this planet is without having
-          to hover. Upsized 0.085 → 0.14 and opacity raised to 1.0 so
-          the label reads clearly through the fog / bloom / particles. */}
+          to hover. Front-bias (in useFrame) fades the label group for
+          planets on the far side of the M, preventing mid-screen stack
+          clutter where 3+ titles would overlap. */}
       <Billboard follow position={[0, isMobile ? 0.22 : 0.3, 0]}>
-        <group>
+        <group ref={labelRef}>
           <Text
             fontSize={isMobile ? 0.065 : 0.12}
             color="#73C5CC"
@@ -269,7 +325,7 @@ function CapabilityPlanet({
             outlineOpacity={0.55}
             material-toneMapped={false}
             material-transparent={true}
-            material-opacity={isDimmed ? 0.35 : isHovered ? 0 : 1.0}
+            material-opacity={1.0}
           >
             {capability.code}
           </Text>
@@ -288,7 +344,7 @@ function CapabilityPlanet({
               outlineOpacity={0.6}
               material-toneMapped={false}
               material-transparent={true}
-              material-opacity={isDimmed ? 0.3 : isHovered ? 0 : 0.92}
+              material-opacity={1.0}
             >
               {capability.title}
             </Text>

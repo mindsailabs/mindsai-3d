@@ -24,8 +24,40 @@ export function Act4Work() {
       style={{ opacity }}
       aria-hidden={opacity < 0.5}
     >
+      {/* Bottom scrim — a soft dark gradient so the featured-work
+          metadata block (Northwood Atelier etc.) is always readable
+          regardless of what's behind it in the 3D video. Without this,
+          bright frames of the case-study videos (gold leather on
+          Northwood, white clinic surfaces on Helio) make the white
+          title text invisible. The gradient stops short of the video
+          frame itself so the video still reads cinematic. */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-[52vh] pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.65) 30%, rgba(0,0,0,0.30) 60%, rgba(0,0,0,0) 100%)',
+        }}
+        aria-hidden
+      />
+      {/* Top scrim — matches for the act headline so it stays readable
+          over bright video frames. */}
+      <div
+        className="absolute inset-x-0 top-0 h-[28vh] pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(to bottom, rgba(0,0,0,0.70) 0%, rgba(0,0,0,0.35) 50%, rgba(0,0,0,0) 100%)',
+        }}
+        aria-hidden
+      />
+
       {/* Section header */}
-      <div className="absolute top-[8vh] left-0 right-0 flex flex-col items-center">
+      <div
+        className="absolute top-[8vh] left-0 right-0 flex flex-col items-center"
+        style={{
+          textShadow:
+            '0 2px 14px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9)',
+        }}
+      >
         <div
           className="text-[10px] md:text-[11px] uppercase tracking-[0.4em] text-brand-teal font-medium"
           style={{
@@ -52,12 +84,15 @@ export function Act4Work() {
 
       {/* Featured-card metadata — anchored to viewport bottom centre.
           pointer-events-auto on the inner block so the "View case study"
-          link is clickable through the pointer-events-none parent. */}
+          link is clickable through the pointer-events-none parent.
+          Text-shadow on all children for extra legibility insurance on
+          the brightest video frames even after the scrim above. */}
       <div
         key={study.id}
         className="absolute bottom-[8vh] md:bottom-[10vh] left-0 right-0 flex flex-col items-center text-center px-4 md:px-6"
         style={{
           animation: 'fadeUp 500ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          textShadow: '0 2px 14px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.9)',
         }}
       >
         <div className="flex items-center gap-2 md:gap-3 mb-2">
