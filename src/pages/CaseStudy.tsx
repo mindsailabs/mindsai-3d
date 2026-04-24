@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import Lenis from 'lenis'
-import { Link, useParams, Navigate } from 'react-router-dom'
+import { Link, useParams, Navigate, useNavigate } from 'react-router-dom'
 import { caseStudies } from '../lib/copy'
 import { MindsMark } from '../three/MindsMark'
 import { ParticleField } from '../three/ParticleField'
@@ -302,12 +302,7 @@ export function CaseStudy() {
                   </div>
                 )}
               </div>
-              <Link
-                to="/#work"
-                className="text-brand-teal text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border-b border-brand-teal/30 hover:border-brand-teal pb-1 transition-colors self-center"
-              >
-                All work
-              </Link>
+              <AllWorkButton />
               <div className="flex-1 text-right">
                 {next ? (
                   <Link
@@ -390,6 +385,48 @@ function NarrativeBlock({
         </p>
       </div>
     </section>
+  )
+}
+
+/**
+ * "All work" back-link. Navigates to home and scrolls to the work
+ * section via Lenis. A plain `<Link to="/#work">` wouldn't scroll
+ * because Lenis doesn't parse hash anchors — we handle the scroll
+ * ourselves after the route change.
+ */
+function AllWorkButton() {
+  const navigate = useNavigate()
+  const scrollToWork = () => {
+    const lenis = (
+      window as unknown as {
+        __lenis?: { limit: number; scrollTo: (v: number) => void }
+      }
+    ).__lenis
+    // 0.68 matches the Nav's "Work" target — the carousel settled frame.
+    if (lenis && typeof lenis.scrollTo === 'function') {
+      lenis.scrollTo(lenis.limit * 0.68)
+    } else {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      window.scrollTo({ top: max * 0.68, behavior: 'smooth' })
+    }
+  }
+  const onClick = () => {
+    if (window.location.pathname === '/') {
+      scrollToWork()
+    } else {
+      navigate('/')
+      // Give Home a beat to mount + Lenis to initialize before scrolling.
+      window.setTimeout(scrollToWork, 300)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-brand-teal text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border-b border-brand-teal/30 hover:border-brand-teal pb-1 transition-colors self-center cursor-pointer"
+    >
+      All work
+    </button>
   )
 }
 

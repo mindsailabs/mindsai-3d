@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import Lenis from 'lenis'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { MindsMark } from '../three/MindsMark'
 import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
@@ -198,13 +198,7 @@ export function Manifesto() {
         {/* Closing return */}
         <section className="min-h-[60vh] flex flex-col items-start justify-center px-6 md:px-12 lg:px-20">
           <div className="max-w-md">
-            <Link
-              to="/"
-              className="group inline-flex items-center gap-2 text-brand-teal text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border-b border-brand-teal/30 hover:border-brand-teal pb-1 transition-colors"
-            >
-              <span>←</span>
-              <span>Return to the work</span>
-            </Link>
+            <ManifestoReturnButton />
             <div className="mt-16 text-text-secondary/50 text-[10px] uppercase tracking-[0.3em] tabular-nums">
               MindsAI Media · London
             </div>
@@ -301,6 +295,45 @@ function StanzaSection({
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * "Return to the work" — navigates home then scrolls to Act 4 (work
+ * carousel). Plain <Link to="/"> would just land at hero.
+ */
+function ManifestoReturnButton() {
+  const navigate = useNavigate()
+  const scrollToWork = () => {
+    const lenis = (
+      window as unknown as {
+        __lenis?: { limit: number; scrollTo: (v: number) => void }
+      }
+    ).__lenis
+    if (lenis && typeof lenis.scrollTo === 'function') {
+      lenis.scrollTo(lenis.limit * 0.68)
+    } else {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      window.scrollTo({ top: max * 0.68, behavior: 'smooth' })
+    }
+  }
+  const onClick = () => {
+    if (window.location.pathname === '/') {
+      scrollToWork()
+    } else {
+      navigate('/')
+      window.setTimeout(scrollToWork, 300)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group inline-flex items-center gap-2 text-brand-teal text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border-b border-brand-teal/30 hover:border-brand-teal pb-1 transition-colors cursor-pointer"
+    >
+      <span>←</span>
+      <span>Return to the work</span>
+    </button>
   )
 }
 

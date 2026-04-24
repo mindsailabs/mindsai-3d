@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import Lenis from 'lenis'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { capabilities } from '../lib/copy'
 import { MindsMark } from '../three/MindsMark'
 import { ParticleField } from '../three/ParticleField'
@@ -214,18 +214,12 @@ export function Process() {
               {NARRATIVE.outro}
             </p>
             <div className="mt-12 flex flex-col gap-4">
-              <Link
-                to="/#contact"
-                className="inline-flex items-center gap-2 text-text-primary text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border border-brand-teal/40 hover:border-brand-teal px-8 py-4 rounded-[3px] transition-colors w-fit"
-              >
+              <ProcessOutroLink fraction={0.95} variant="primary">
                 Start a project →
-              </Link>
-              <Link
-                to="/"
-                className="text-text-secondary/70 hover:text-brand-teal text-[10px] uppercase tracking-[0.3em] font-medium transition-colors w-fit"
-              >
+              </ProcessOutroLink>
+              <ProcessOutroLink fraction={0.68} variant="secondary">
                 ← Return to the work
-              </Link>
+              </ProcessOutroLink>
             </div>
           </div>
         </section>
@@ -239,6 +233,53 @@ export function Process() {
  * The centre of the screen is ALWAYS empty, so the M + orbital ring
  * remain the visible focus.
  */
+/**
+ * Process outro nav buttons — navigate home, then scroll to the target
+ * fraction via Lenis. Plain <Link to="/#work"> wouldn't scroll because
+ * Lenis doesn't parse hash anchors.
+ */
+function ProcessOutroLink({
+  fraction,
+  variant,
+  children,
+}: {
+  fraction: number
+  variant: 'primary' | 'secondary'
+  children: React.ReactNode
+}) {
+  const navigate = useNavigate()
+  const scrollToFraction = () => {
+    const lenis = (
+      window as unknown as {
+        __lenis?: { limit: number; scrollTo: (v: number) => void }
+      }
+    ).__lenis
+    if (lenis && typeof lenis.scrollTo === 'function') {
+      lenis.scrollTo(lenis.limit * fraction)
+    } else {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      window.scrollTo({ top: max * fraction, behavior: 'smooth' })
+    }
+  }
+  const onClick = () => {
+    if (window.location.pathname === '/') {
+      scrollToFraction()
+    } else {
+      navigate('/')
+      window.setTimeout(scrollToFraction, 300)
+    }
+  }
+  const className =
+    variant === 'primary'
+      ? 'inline-flex items-center gap-2 text-text-primary text-[11px] md:text-[12px] uppercase tracking-[0.3em] font-medium border border-brand-teal/40 hover:border-brand-teal px-8 py-4 rounded-[3px] transition-colors w-fit cursor-pointer'
+      : 'text-text-secondary/70 hover:text-brand-teal text-[10px] uppercase tracking-[0.3em] font-medium transition-colors w-fit cursor-pointer'
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {children}
+    </button>
+  )
+}
+
 function ModuleSection({
   index,
   code,
