@@ -39,8 +39,8 @@ export function Nav() {
   }
 
   return (
-    <nav className="fixed top-4 right-4 md:top-6 md:right-8 z-30 pointer-events-auto">
-      <div className="flex items-center gap-0 md:gap-1 px-2 md:px-4 py-1.5 md:py-2 rounded-full border border-white/15 bg-black/30 backdrop-blur-md">
+    <nav className="fixed top-4 right-2 md:top-6 md:right-8 z-30 pointer-events-auto">
+      <div className="flex items-center gap-0 md:gap-1 px-1.5 md:px-4 py-1.5 md:py-2 rounded-full border border-white/15 bg-black/30 backdrop-blur-md">
         <NavButton label="Work" onClick={() => go(0.68)} />
         <NavDivider />
         <NavButton label="Process" asLink to="/process" />
@@ -59,7 +59,7 @@ export function Nav() {
 }
 
 function NavDivider() {
-  return <div className="w-3 md:w-6 h-px bg-white/15" />
+  return <div className="w-2 md:w-6 h-px bg-white/15" />
 }
 
 interface NavButtonProps {
@@ -71,7 +71,7 @@ interface NavButtonProps {
 
 function NavButton({ label, onClick, asLink, to }: NavButtonProps) {
   const className =
-    'text-[9px] md:text-[11px] uppercase tracking-[0.15em] md:tracking-[0.2em] font-medium text-text-primary/80 hover:text-brand-teal px-1.5 md:px-2 py-1 transition-colors duration-300'
+    'text-[9px] md:text-[11px] uppercase tracking-[0.1em] md:tracking-[0.2em] font-medium text-text-primary/80 hover:text-brand-teal px-1 md:px-2 py-1 transition-colors duration-300'
   if (asLink && to) {
     return (
       <Link to={to} className={className}>
