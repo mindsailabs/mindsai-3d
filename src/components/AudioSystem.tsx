@@ -138,7 +138,7 @@ export function AudioSystem() {
     <button
       onClick={toggleAudio}
       aria-label={audioEnabled ? 'Mute ambient audio' : 'Unmute ambient audio'}
-      className="fixed bottom-6 right-6 z-30 pointer-events-auto group"
+      className="fixed bottom-6 right-6 z-30 pointer-events-auto group relative after:content-[''] after:absolute after:-inset-2 md:after:inset-0"
     >
       <div className="flex items-center gap-2 px-3 py-2 rounded-full border border-white/15 bg-black/30 backdrop-blur-md hover:border-brand-teal/50 transition-colors">
         <div className="flex items-end gap-[3px] h-3">

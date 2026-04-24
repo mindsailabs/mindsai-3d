@@ -73,8 +73,14 @@ interface NavButtonProps {
 }
 
 function NavButton({ label, onClick, asLink, to }: NavButtonProps) {
+  // Tap target compliance: on mobile the pill buttons are visually ~22px
+  // tall (font-size 9px + py-1). Apple HIG / WCAG 2.5.5 require a 44pt
+  // minimum touch target. We extend the tap area via an invisible
+  // pseudo-element ::after that overlaps neighbouring whitespace so the
+  // pill stays visually compact while taps land reliably.
   const className =
-    'text-[9px] md:text-[11px] uppercase tracking-[0.1em] md:tracking-[0.2em] font-medium text-text-primary/80 hover:text-brand-teal px-1 md:px-2 py-1 transition-colors duration-300'
+    'relative text-[9px] md:text-[11px] uppercase tracking-[0.1em] md:tracking-[0.2em] font-medium text-text-primary/80 hover:text-brand-teal px-1 md:px-2 py-1 transition-colors duration-300 ' +
+    "after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3 md:after:inset-0"
   if (asLink && to) {
     return (
       <Link to={to} className={className}>
@@ -115,7 +121,7 @@ export function NavLogo() {
       href="/"
       onClick={handleClick}
       aria-label="MindsAI Media — return home"
-      className="fixed top-5 left-5 md:top-6 md:left-8 z-30 pointer-events-auto text-text-primary font-black text-[13px] tracking-tight"
+      className="fixed top-5 left-5 md:top-6 md:left-8 z-30 pointer-events-auto text-text-primary font-black text-[13px] tracking-tight relative after:content-[''] after:absolute after:-inset-3 md:after:inset-0"
     >
       Minds<span className="text-brand-teal">AI</span>
     </a>
