@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useViewport } from '../lib/useViewport'
 import { useAppStore } from '../lib/store'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * Layered ambient starfield.
@@ -129,6 +130,7 @@ function ParticleLayer({
 }: ParticleLayerProps) {
   const pointsRef = useRef<THREE.Points>(null!)
   const matRef = useRef<THREE.ShaderMaterial>(null!)
+  const reducedMotion = useReducedMotion()
 
   const geometry = useMemo(() => {
     const g = new THREE.BufferGeometry()
@@ -170,15 +172,18 @@ function ParticleLayer({
   )
 
   useFrame((state) => {
+    // Reduced motion: freeze particle time so the shader's sine-driven
+    // drift is static, and don't rotate the layer. Particles still
+    // SHOW (as specks of light in space) — they just don't move.
+    const t = reducedMotion ? 0 : state.clock.elapsedTime
     if (matRef.current) {
-      matRef.current.uniforms.uTime.value = state.clock.elapsedTime
+      matRef.current.uniforms.uTime.value = t
       matRef.current.uniforms.uSizeScale.value = sizeScale
       matRef.current.uniforms.uAssembly.value = assemblyRef.current
     }
     if (pointsRef.current) {
-      pointsRef.current.rotation.y = state.clock.elapsedTime * driftSpeed
-      pointsRef.current.rotation.x =
-        Math.sin(state.clock.elapsedTime * driftSpeed * 0.4) * 0.04
+      pointsRef.current.rotation.y = t * driftSpeed
+      pointsRef.current.rotation.x = Math.sin(t * driftSpeed * 0.4) * 0.04
     }
   })
 
