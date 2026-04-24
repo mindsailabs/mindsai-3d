@@ -6,6 +6,7 @@ import { MindsMark } from '../three/MindsMark'
 import { ParticleField } from '../three/ParticleField'
 import { PostProcess } from '../three/PostProcess'
 import { useViewport } from '../lib/useViewport'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * /404 — the void page.
@@ -98,10 +99,20 @@ function GlitchingM({ children }: { children: React.ReactNode }) {
   const groupRef = useRef<THREE.Group>(null!)
   const nextJitterAt = useRef(0)
   const jitter = useRef({ x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 })
+  const reducedMotion = useReducedMotion()
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
-    if (t > nextJitterAt.current) {
+    if (reducedMotion) {
+      // No jitter tremor — the M sits perfectly still. Users with
+      // vestibular disorders get a clean static portrait on /404.
+      jitter.current.x = 0
+      jitter.current.y = 0
+      jitter.current.z = 0
+      jitter.current.rx = 0
+      jitter.current.ry = 0
+      jitter.current.rz = 0
+    } else if (t > nextJitterAt.current) {
       nextJitterAt.current = t + 0.2 + Math.random() * 0.4
       jitter.current = {
         x: (Math.random() - 0.5) * 0.1,
@@ -134,6 +145,7 @@ function GlitchingM({ children }: { children: React.ReactNode }) {
  * than a tidy orbit.
  */
 function ShardRings() {
+  const reducedMotion = useReducedMotion()
   const rings = useMemo(
     () => [
       { count: 14, radius: 2.2, tilt: 0.25, speed: 0.25, axis: 'x' as const },
@@ -182,7 +194,9 @@ function ShardRings() {
   }, [])
 
   useFrame((state) => {
-    const t = state.clock.elapsedTime
+    // Reduced motion: freeze all shard motion. Users with vestibular
+    // sensitivity get a still constellation instead of rotating shards.
+    const t = reducedMotion ? 0 : state.clock.elapsedTime
     shardData.forEach((s, i) => {
       const mesh = meshRefs.current[i]
       if (!mesh) return
@@ -242,6 +256,7 @@ function LostCamera() {
   const cursor = useRef({ x: 0, y: 0 })
   const cursorSmoothed = useRef({ x: 0, y: 0 })
   const { isMobile } = useViewport()
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -259,12 +274,13 @@ function LostCamera() {
     cursorSmoothed.current.y +=
       (cursor.current.y - cursorSmoothed.current.y) * 0.04
     const cam = state.camera
-    cam.position.x =
-      Math.sin(t * 0.12) * 0.6 + cursorSmoothed.current.x * 0.4
-    cam.position.y =
-      Math.cos(t * 0.09) * 0.3 + cursorSmoothed.current.y * 0.25
-    cam.position.z =
-      (isMobile ? 10.5 : 7.5) + Math.sin(t * 0.07) * 0.15
+    const parallaxAmp = reducedMotion ? 0 : 1
+    const timeDriftX = reducedMotion ? 0 : Math.sin(t * 0.12) * 0.6
+    const timeDriftY = reducedMotion ? 0 : Math.cos(t * 0.09) * 0.3
+    const timeDriftZ = reducedMotion ? 0 : Math.sin(t * 0.07) * 0.15
+    cam.position.x = timeDriftX + cursorSmoothed.current.x * 0.4 * parallaxAmp
+    cam.position.y = timeDriftY + cursorSmoothed.current.y * 0.25 * parallaxAmp
+    cam.position.z = (isMobile ? 10.5 : 7.5) + timeDriftZ
     cam.lookAt(0, 0, 0)
     if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
       const target = isMobile ? 42 : 36

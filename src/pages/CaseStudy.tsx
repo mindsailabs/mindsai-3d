@@ -10,6 +10,7 @@ import { PostProcess } from '../three/PostProcess'
 import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
 import { useViewport } from '../lib/useViewport'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * /work/:id — dedicated case-study page.
@@ -438,6 +439,7 @@ function CaseStudyCamera() {
   const mouse = useRef({ x: 0, y: 0 })
   const mouseSmoothed = useRef({ x: 0, y: 0 })
   const { isMobile } = useViewport()
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -455,14 +457,18 @@ function CaseStudyCamera() {
     mouseSmoothed.current.y +=
       (mouse.current.y - mouseSmoothed.current.y) * 0.04
 
-    const yaw = Math.sin(t * 0.06) * 0.12 + mouseSmoothed.current.x * 0.15
+    const yaw = reducedMotion
+      ? 0
+      : Math.sin(t * 0.06) * 0.12 + mouseSmoothed.current.x * 0.15
     const orbitRadius = isMobile ? 10.5 : 7.5
+    const parallaxAmp = reducedMotion ? 0 : 1
+    const timeBreath = reducedMotion ? 0 : Math.cos(t * 0.05) * 0.08
     const cam = state.camera
     cam.position.x = Math.sin(yaw) * orbitRadius
     cam.position.y =
-      0.2 + Math.cos(t * 0.05) * 0.08 + mouseSmoothed.current.y * 0.25
+      0.2 + timeBreath + mouseSmoothed.current.y * 0.25 * parallaxAmp
     cam.position.z = Math.cos(yaw) * orbitRadius
-    cam.lookAt(0, mouseSmoothed.current.y * 0.04, 0)
+    cam.lookAt(0, mouseSmoothed.current.y * 0.04 * parallaxAmp, 0)
     if ((cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
       const target = isMobile ? 40 : 32
       const pc = cam as THREE.PerspectiveCamera

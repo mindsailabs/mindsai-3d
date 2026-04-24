@@ -9,6 +9,7 @@ import { PostProcess } from '../three/PostProcess'
 import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
 import { useViewport } from '../lib/useViewport'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * /manifesto — the philosophical thesis page.
@@ -350,6 +351,7 @@ function ManifestoCamera() {
   const mouseSmoothed = useRef({ x: 0, y: 0 })
   const scrollProgress = useAppStore((s) => s.scrollProgress)
   const { isMobile } = useViewport()
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -368,13 +370,17 @@ function ManifestoCamera() {
       (mouse.current.y - mouseSmoothed.current.y) * 0.04
 
     const sp = scrollProgress
-    const yaw = sp * 0.5 + Math.sin(t * 0.07) * 0.05 // gentle 30° sweep
+    // Reduced motion: park the camera statically (yaw = 0, no time-
+    // driven sine sweep, no cursor parallax).
+    const yaw = reducedMotion ? 0 : sp * 0.5 + Math.sin(t * 0.07) * 0.05
     const orbitRadius = isMobile ? 10.5 : 7.5
+    const parallaxAmp = reducedMotion ? 0 : 1
+    const timeBreath = reducedMotion ? 0 : Math.cos(t * 0.05) * 0.06
     const camX =
-      Math.sin(yaw) * orbitRadius + mouseSmoothed.current.x * 0.3
+      Math.sin(yaw) * orbitRadius + mouseSmoothed.current.x * 0.3 * parallaxAmp
     const camZ = Math.cos(yaw) * orbitRadius
     const camY =
-      0.15 + Math.cos(t * 0.05) * 0.06 + mouseSmoothed.current.y * 0.2
+      0.15 + timeBreath + mouseSmoothed.current.y * 0.2 * parallaxAmp
 
     const cam = state.camera
     cam.position.set(camX, camY, camZ)

@@ -10,6 +10,7 @@ import { PostProcess } from '../three/PostProcess'
 import { OrbitalStage, type Orbit } from '../three/OrbitalStage'
 import { useAppStore } from '../lib/store'
 import { useViewport } from '../lib/useViewport'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
  * /process — the apparatus around the mark.
@@ -355,6 +356,7 @@ function ProcessCamera() {
   const mouseSmoothed = useRef({ x: 0, y: 0 })
   const scrollProgress = useAppStore((s) => s.scrollProgress)
   const { isMobile } = useViewport()
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
@@ -374,16 +376,18 @@ function ProcessCamera() {
 
     const sp = scrollProgress
 
-    // Yaw sweep from 0 to ~1.05 rad (~60°) as you scroll.
-    const yaw = sp * 1.05 + Math.sin(t * 0.08) * 0.04
-    // Mobile: pull back so the M + orbital rings fit portrait.
+    // Reduced motion: fix yaw + orbit radius, zero all sine sweeps and
+    // cursor parallax. User sees a still photograph of the apparatus.
+    const yaw = reducedMotion ? 0 : sp * 1.05 + Math.sin(t * 0.08) * 0.04
     const baseRadius = isMobile ? 10.5 : 7.5
-    const orbitRadius = baseRadius - sp * 0.8
+    const orbitRadius = reducedMotion ? baseRadius : baseRadius - sp * 0.8
+    const parallaxAmp = reducedMotion ? 0 : 1
+    const timeBreath = reducedMotion ? 0 : Math.cos(t * 0.06) * 0.08
     const camX =
-      Math.sin(yaw) * orbitRadius + mouseSmoothed.current.x * 0.35
+      Math.sin(yaw) * orbitRadius + mouseSmoothed.current.x * 0.35 * parallaxAmp
     const camZ = Math.cos(yaw) * orbitRadius
     const camY =
-      0.2 + Math.cos(t * 0.06) * 0.08 + mouseSmoothed.current.y * 0.25
+      0.2 + timeBreath + mouseSmoothed.current.y * 0.25 * parallaxAmp
 
     const cam = state.camera
     cam.position.set(camX, camY, camZ)
