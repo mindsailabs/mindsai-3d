@@ -73,6 +73,7 @@
     font-weight: 500;
     transition: top 200ms ease;
   }
+  .skip-to-content:focus,
   .skip-to-content:focus-visible {
     top: 12px;
   }
