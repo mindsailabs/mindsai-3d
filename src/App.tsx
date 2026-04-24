@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { Nav, NavLogo } from './components/Nav'
 import { AudioSystem } from './components/AudioSystem'
 import { OpeningFade } from './components/OpeningFade'
+import { RouteErrorBoundary } from './components/RouteErrorBoundary'
 import { Home } from './pages/Home'
 
 // Non-home routes lazy-loaded so the initial home-page bundle doesn't
@@ -44,15 +45,17 @@ export default function App() {
   return (
     <BrowserRouter>
       <SharedLayout>
-        <Suspense fallback={<div className="min-h-screen bg-black" />}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/manifesto" element={<Manifesto />} />
-            <Route path="/process" element={<Process />} />
-            <Route path="/work/:id" element={<CaseStudy />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
+        <RouteErrorBoundary>
+          <Suspense fallback={<div className="min-h-screen bg-black" />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/manifesto" element={<Manifesto />} />
+              <Route path="/process" element={<Process />} />
+              <Route path="/work/:id" element={<CaseStudy />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </RouteErrorBoundary>
       </SharedLayout>
     </BrowserRouter>
   )
