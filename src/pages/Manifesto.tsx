@@ -192,15 +192,22 @@ export function Manifesto() {
           </div>
         </section>
 
+        {/* Soft divider between hero and stanzas — visual hand-off. */}
+        <div className="flex justify-center py-2">
+          <div className="h-px w-24 bg-brand-teal/25" />
+        </div>
+
         {STANZAS.map((stanza, i) => (
           <StanzaSection key={i} stanza={stanza} index={i} />
         ))}
 
-        {/* Closing return */}
-        <section className="min-h-[60vh] flex flex-col items-start justify-center px-6 md:px-12 lg:px-20">
-          <div className="max-w-md">
+        {/* Closing return — matches the centered ceremonial rhythm of
+            the stanzas above, so the page reads as one cohesive scroll
+            rather than alternating left-bias at the bottom. */}
+        <section className="min-h-[55vh] flex flex-col items-center justify-center px-6 md:px-12 lg:px-20 py-[10vh] text-center">
+          <div className="max-w-md flex flex-col items-center">
             <ManifestoReturnButton />
-            <div className="mt-16 text-text-secondary/50 text-[10px] uppercase tracking-[0.3em] tabular-nums">
+            <div className="mt-12 text-text-secondary/50 text-[10px] uppercase tracking-[0.3em] tabular-nums">
               MindsAI Media · London
             </div>
           </div>
@@ -211,12 +218,17 @@ export function Manifesto() {
 }
 
 /**
- * Stanza — narrow side column (max ~36vw) alternating L/R. Keeps the
- * centre of the viewport clear for the M + orbital rings.
+ * Stanza — centered, ceremonial composition. One stanza per ~half-
+ * viewport so the page reads as a deliberate sequence of beats rather
+ * than a series of side-aligned labels in 9 viewports of black.
+ *
+ * Manifesto text wants big + centered + ceremonial. Earlier "narrow
+ * alternating L/R column" version made the eye bounce side-to-side
+ * with no rhythm; now every stanza follows the same shape: optional
+ * bracketed eyebrow above a centered display-scale title.
  */
 function StanzaSection({
   stanza,
-  index,
 }: {
   stanza: Stanza
   index: number
@@ -235,44 +247,33 @@ function StanzaSection({
     return () => io.disconnect()
   }, [ref])
 
-  const alignRight = index % 2 === 1
-
   return (
     <section
       ref={setRef}
-      className="min-h-screen flex items-center px-6 md:px-12 lg:px-20"
+      className="min-h-[55vh] md:min-h-[62vh] flex items-center justify-center px-6 md:px-12 lg:px-20 py-12"
     >
       <div
-        className={
-          'max-w-[400px] lg:max-w-[460px] w-full ' +
-          (alignRight ? 'ml-auto text-right' : 'mr-auto')
-        }
+        className="max-w-[920px] w-full text-center"
         style={{
           opacity: visible ? 1 : 0,
-          filter: visible ? 'blur(0)' : 'blur(16px)',
+          filter: visible ? 'blur(0)' : 'blur(14px)',
           transform: visible ? 'translateY(0)' : 'translateY(40px)',
           transition:
-            'opacity 1400ms cubic-bezier(0.22, 1, 0.36, 1),' +
-            ' filter 1200ms cubic-bezier(0.22, 1, 0.36, 1),' +
-            ' transform 1400ms cubic-bezier(0.22, 1, 0.36, 1)',
+            'opacity 1300ms cubic-bezier(0.22, 1, 0.36, 1),' +
+            ' filter 1100ms cubic-bezier(0.22, 1, 0.36, 1),' +
+            ' transform 1300ms cubic-bezier(0.22, 1, 0.36, 1)',
         }}
       >
         {stanza.eyebrow && (
-          <div className="text-brand-teal text-[9px] md:text-[10px] uppercase tracking-[0.45em] font-medium mb-8 tabular-nums">
-            {alignRight ? (
-              <span className="inline-flex items-center gap-3">
-                {stanza.eyebrow}
-                <span className="h-px w-8 bg-brand-teal/50" />
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-3">
-                <span className="h-px w-8 bg-brand-teal/50" />
-                {stanza.eyebrow}
-              </span>
-            )}
+          <div className="flex items-center justify-center gap-4 mb-8 md:mb-10">
+            <span className="h-px w-10 md:w-16 bg-brand-teal/40" />
+            <span className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.45em] font-medium tabular-nums whitespace-nowrap">
+              {stanza.eyebrow}
+            </span>
+            <span className="h-px w-10 md:w-16 bg-brand-teal/40" />
           </div>
         )}
-        <div className="text-text-primary font-black text-[clamp(1.75rem,4.5vw,4rem)] leading-[0.92] tracking-tight md:tracking-tightest">
+        <div className="text-text-primary font-black text-[clamp(2.25rem,6vw,6.5rem)] leading-[0.9] tracking-tight md:tracking-tightest">
           {stanza.lines.map((line, li) => (
             <div key={li}>
               {stanza.emphasis && line.includes(stanza.emphasis) ? (
