@@ -168,7 +168,7 @@ export function Process() {
       >
         {/* HERO — title anchored TOP, intro at bottom. M + orbital ring
             sit in the MIDDLE band of the viewport untouched. */}
-        <section className="min-h-screen flex flex-col justify-between px-6 md:px-12 lg:px-20 py-[14vh]">
+        <section className="min-h-screen flex flex-col justify-between px-6 md:px-12 lg:px-20 py-[12vh]">
           <div className="max-w-[1100px] w-full">
             <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-6">
               The process
@@ -189,6 +189,11 @@ export function Process() {
           </div>
         </section>
 
+        {/* Soft divider between hero and modules — visual hand-off. */}
+        <div className="flex justify-center py-2">
+          <div className="h-px w-24 bg-brand-teal/25" />
+        </div>
+
         {/* SEVEN MODULES — narrow side-column alternating L/R so the
             centre of the viewport always shows the M + active satellite. */}
         {capabilities.map((cap, i) => (
@@ -202,19 +207,25 @@ export function Process() {
           />
         ))}
 
-        {/* OUTRO — centred but text only, M still the focal point behind. */}
-        <section className="min-h-screen flex flex-col items-start justify-end px-6 md:px-12 lg:px-20 pb-[14vh]">
-          <div className="max-w-xl">
-            <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-6">
-              The compound
+        {/* OUTRO — centred composition matching the module sections,
+            so the page reads as one cohesive scroll-rhythm rather than
+            "modules left/right then a different layout at the bottom." */}
+        <section className="min-h-[75vh] flex items-center justify-center px-6 md:px-12 lg:px-20 py-[10vh]">
+          <div className="max-w-[760px] w-full text-center">
+            <div className="flex items-center justify-center gap-4 mb-7 md:mb-9">
+              <span className="h-px w-10 md:w-16 bg-brand-teal/40" />
+              <span className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.45em] font-medium whitespace-nowrap">
+                The compound
+              </span>
+              <span className="h-px w-10 md:w-16 bg-brand-teal/40" />
             </div>
-            <h2 className="text-text-primary font-black text-[clamp(2rem,5vw,4.5rem)] leading-[0.9] tracking-tight md:tracking-tightest">
+            <h2 className="text-text-primary font-black text-[clamp(2.25rem,5.5vw,4.75rem)] leading-[0.9] tracking-tight md:tracking-tightest">
               Every module compounds.
             </h2>
-            <p className="mt-6 text-text-secondary text-[13px] md:text-[15px] leading-relaxed">
+            <p className="mt-6 text-text-secondary text-[15px] md:text-[18px] leading-relaxed max-w-[540px] mx-auto">
               {NARRATIVE.outro}
             </p>
-            <div className="mt-12 flex flex-col gap-4">
+            <div className="mt-10 md:mt-12 flex flex-col items-center gap-4">
               <ProcessOutroLink fraction={0.95} variant="primary">
                 Start a project →
               </ProcessOutroLink>
@@ -302,42 +313,44 @@ function ModuleSection({
     const io = new IntersectionObserver(
       (entries) =>
         entries.forEach((e) => e.isIntersecting && setVisible(true)),
-      { threshold: 0.35 }
+      { threshold: 0.4 }
     )
     io.observe(ref)
     return () => io.disconnect()
   }, [ref])
 
-  const alignRight = index % 2 === 1
-
   return (
     <section
       ref={setRef}
-      className="min-h-screen flex items-center px-6 md:px-12 lg:px-20"
+      className="min-h-[55vh] md:min-h-[62vh] flex items-center justify-center px-6 md:px-12 lg:px-20 py-12 md:py-16"
     >
       <div
-        className={
-          'max-w-[440px] lg:max-w-[480px] w-full ' +
-          (alignRight ? 'ml-auto text-right' : 'mr-auto')
-        }
+        className="max-w-[760px] lg:max-w-[820px] w-full text-center"
         style={{
           opacity: visible ? 1 : 0,
           filter: visible ? 'blur(0)' : 'blur(10px)',
           transform: visible ? 'translateY(0)' : 'translateY(32px)',
           transition:
-            'opacity 1400ms cubic-bezier(0.22, 1, 0.36, 1),' +
-            ' filter 1200ms cubic-bezier(0.22, 1, 0.36, 1),' +
-            ' transform 1400ms cubic-bezier(0.22, 1, 0.36, 1)',
+            'opacity 1200ms cubic-bezier(0.22, 1, 0.36, 1),' +
+            ' filter 1000ms cubic-bezier(0.22, 1, 0.36, 1),' +
+            ' transform 1200ms cubic-bezier(0.22, 1, 0.36, 1)',
         }}
       >
-        <div className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.4em] font-medium mb-4 tabular-nums">
-          {code} · {String(index + 1).padStart(2, '0')} /{' '}
-          {String(totalCount).padStart(2, '0')}
+        {/* Top divider — thin teal line + index badge. Replaces the old
+            left-aligned eyebrow with a more centred, ceremonial header
+            that signals "new module" consistently. */}
+        <div className="flex items-center justify-center gap-4 mb-7 md:mb-9">
+          <span className="h-px w-10 md:w-16 bg-brand-teal/40" />
+          <span className="text-brand-teal text-[10px] md:text-[11px] uppercase tracking-[0.45em] font-medium tabular-nums whitespace-nowrap">
+            {code} · {String(index + 1).padStart(2, '0')} /{' '}
+            {String(totalCount).padStart(2, '0')}
+          </span>
+          <span className="h-px w-10 md:w-16 bg-brand-teal/40" />
         </div>
-        <h3 className="text-text-primary font-black text-[clamp(1.75rem,4.5vw,4rem)] leading-[0.92] tracking-tight md:tracking-tightest mb-5">
+        <h3 className="text-text-primary font-black text-[clamp(2rem,5.5vw,4.75rem)] leading-[0.92] tracking-tight md:tracking-tightest mb-5 md:mb-7">
           {title}
         </h3>
-        <p className="text-text-secondary text-[14px] md:text-[17px] leading-relaxed">
+        <p className="text-text-secondary text-[15px] md:text-[18px] leading-relaxed max-w-[540px] mx-auto">
           {description}
         </p>
       </div>
