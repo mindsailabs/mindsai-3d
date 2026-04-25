@@ -15,34 +15,19 @@ export default defineConfig({
     port: 5173,
   },
   build: {
-    // Raise warning threshold so vendor chunk (three.js ~550kB on its
-    // own) doesn't trigger warnings. Still flagged above 800kB.
-    chunkSizeWarningLimit: 800,
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          if (!id.includes('node_modules')) return undefined
-          // Three.js core gets its own chunk so browsers can cache it
-          // long-term across deploys (app code changes, three doesn't).
-          if (id.includes('three/build') || id.includes('/three/') ||
-              id.includes('@react-three') ||
-              id.includes('postprocessing')) {
-            return 'vendor-three'
-          }
-          // React + react-router bundled together as a separate vendor chunk.
-          if (id.includes('/react/') || id.includes('/react-dom/') ||
-              id.includes('/react-router') || id.includes('scheduler')) {
-            return 'vendor-react'
-          }
-          // Form libs (zod + react-hook-form) — only used on Act 5 contact.
-          if (id.includes('/zod/') || id.includes('react-hook-form') ||
-              id.includes('@hookform')) {
-            return 'vendor-forms'
-          }
-          // Rest of node_modules → small shared vendor chunk.
-          return 'vendor-misc'
-        },
-      },
-    },
+    // three.js bundles big (~800kB minified). Without this the build
+    // warns at 500kB; raise to 1000kB so the warning is informative not
+    // alarmist.
+    //
+    // NOTE: We previously had a manualChunks splitter (vendor-three /
+    // vendor-react / vendor-forms / vendor-misc). It produced a clean
+    // chunk graph in dev but crashed production with a TDZ error
+    // ("Cannot access 'ko' before initialization") because troika-three-
+    // text and other three-adjacent libs ended up in vendor-misc while
+    // vendor-three referenced them, creating a circular init order.
+    // Reverted — Vite's default code-splitting handles route-level
+    // dynamic imports (Manifesto/Process/CaseStudy/NotFound) just fine
+    // and avoids the circular-dep landmine.
+    chunkSizeWarningLimit: 1000,
   },
 })
