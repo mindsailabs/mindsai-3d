@@ -44,10 +44,13 @@ export const distortionFragmentShader = /* glsl */ `
     vec2 uv = vUv;
     vec2 center = vec2(0.5);
 
-    // Combine velocity + hover into a single "intensity" driver. Hover
-    // adds a permanent low-grade ripple so even idle hovered cards feel
-    // alive. Reduced-motion zeros everything.
-    float intensity = (uVelocity + uHover * 0.3) * (1.0 - uReduceMotion);
+    // Intensity = scroll velocity ONLY. Earlier version added a 30%
+    // always-on contribution from uHover for "featured" cards, which
+    // produced a constant wobble on idle videos (user feedback: case
+    // study videos looked bent at rest). Now hover only drives the
+    // vignette brightness in step 4 — ripple/CA/pixelation are pure
+    // velocity-driven, idle = perfectly crisp.
+    float intensity = uVelocity * (1.0 - uReduceMotion);
 
     // ─── 1. RIPPLE WARP ────────────────────────────────────────────
     // Concentric sine ripple radiating from centre. Phase animates
@@ -79,9 +82,13 @@ export const distortionFragmentShader = /* glsl */ `
 
     // ─── 4. VIGNETTE ───────────────────────────────────────────────
     // Always-on subtle radial darkening toward edges. Independent of
-    // velocity — keeps the cinematic frame on idle states.
+    // velocity — keeps the cinematic frame on idle states. Hover
+    // brightens the centre slightly (the only effect uHover drives now)
+    // so featured cards have a subtle "spotlight on me" cue without
+    // the wobble that plagued v1.
     float vignette = 1.0 - smoothstep(0.5, 0.95, dist);
     color *= mix(0.85, 1.0, vignette);
+    color *= 1.0 + uHover * 0.12 * (1.0 - dist);
 
     // Final alpha — uOpacity for plane-level fades.
     gl_FragColor = vec4(color, uOpacity);

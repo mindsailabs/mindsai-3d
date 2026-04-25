@@ -220,54 +220,55 @@ function CapabilityPlanet({
     let d = Math.abs(index - featured)
     d = Math.min(d, PLANET_COUNT - d) // wrap-aware
 
-    // Gaussian falloff. Width 0.65 chosen so:
+    // Gaussian falloff. v2 — TIGHTER width (0.28 instead of 0.65) so
+    // only the featured planet + very-near-transition neighbour read
+    // as "active." User feedback: "items revolving are not visible"
+    // = previous width gave ALL planets partial credit and the scene
+    // looked like a static cloud of equally-bright orbs. Now:
     //   d=0 (featured): 1.00
-    //   d=0.5         : 0.74  (mid-transition between two planets)
-    //   d=1 (next-door): 0.30
-    //   d=2           : 0.008 (negligible)
-    const featureT = Math.exp(-(d * d) / 0.65)
+    //   d=0.5 (mid)   : 0.41
+    //   d=1 (next)    : 0.03 (essentially off)
+    const featureT = Math.exp(-(d * d) / 0.28)
 
-    // Scale + brightness lerp.
+    // Scale + brightness lerp. v2 — much sharper contrast between
+    // featured and not, so each planet "expands" dramatically as it
+    // becomes the active one.
     if (nodeRef.current) {
-      // Hover overrides featureT for the hovered planet.
       const effectiveT = isHovered ? 1.4 : featureT
       const targetScale = anyHovered && !isHovered
-        ? 0.55
-        : 1.0 + effectiveT * 0.85 // featured 1.85, far 1.0
+        ? 0.4
+        : 0.55 + effectiveT * 1.95 // featured 2.5×, far 0.55×
       const cur = nodeRef.current.scale.x
       nodeRef.current.scale.setScalar(cur + (targetScale - cur) * 0.14)
 
-      // Brightness: featured 5.5×, far 1.5×.
       const mat = nodeRef.current.material as THREE.MeshBasicMaterial
-      const boost = isHovered ? 5.5 : 1.5 + effectiveT * 4.0
+      // Featured 6.5× brightness, far 0.7× — clear hierarchy.
+      const boost = isHovered ? 6.5 : 0.7 + effectiveT * 5.8
       mat.color = baseColor.clone().multiplyScalar(boost)
-      // Opacity tracks featureT — far planets quietly recede (depth-of-
-      // field via opacity, not actual blur — keeps post-process budget).
       const targetOpacity = anyHovered && !isHovered
-        ? 0.35
-        : 0.55 + effectiveT * 0.45
+        ? 0.2
+        : 0.3 + effectiveT * 0.7
       mat.opacity = mat.opacity + (targetOpacity - mat.opacity) * 0.14
     }
 
-    // Glow halo follows featureT — featured planet has a wide aura.
+    // Glow halo — wider + brighter for featured.
     if (glowRef.current) {
-      const gTarget = isHovered ? 3.4 : 1.0 + featureT * 2.4
+      const gTarget = isHovered ? 4.0 : 0.5 + featureT * 3.5
       const c = glowRef.current.scale.x
       glowRef.current.scale.setScalar(c + (gTarget - c) * 0.12)
       const gm = glowRef.current.material as THREE.MeshBasicMaterial
-      const gOp = isHovered ? 0.55 : 0.1 + featureT * 0.35
+      const gOp = isHovered ? 0.6 : 0.04 + featureT * 0.5
       gm.opacity = gm.opacity + (gOp - gm.opacity) * 0.14
     }
 
-    // Always-visible code label fades with featureT (back-of-tour
-    // planets get nearly-invisible code badges; featured planet's code
-    // is full-bright but hidden when its expanded card is up).
+    // Label visibility — v2 strictly featureT-driven, NO floor. Far-
+    // from-featured planets show no label at all → only the active
+    // planet's title is visible at any moment, eliminating the "all
+    // 7 labels stacked" clutter. The label group's opacity lerps
+    // toward featureT^1.4 (sharper than linear so non-featured
+    // planets fade fast).
     if (labelRef.current) {
-      const target = isHovered
-        ? 0
-        : anyHovered
-        ? 0.2
-        : Math.max(0.35, featureT * 1.05)
+      const target = isHovered ? 0 : Math.pow(featureT, 1.4)
       labelRef.current.traverse((obj) => {
         const mat = (obj as unknown as { material?: THREE.Material }).material
         if (mat && 'opacity' in mat) {
