@@ -5,90 +5,129 @@ import * as THREE from 'three'
 import { capabilities, smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
 import { useViewport } from '../lib/useViewport'
+import { useReducedMotion } from '../lib/useReducedMotion'
 
 /**
- * Seven capability planets orbiting the M (the "sun") during Act 3.
+ * Seven capability planets — scroll-driven planet tour (v4).
  *
- * v3 — planets, not a constellation.
+ * Earlier versions ran each planet on its OWN orbital clock (per-planet
+ * angular velocity + delta * speed) WHILE the group also rotated with
+ * scroll. Net result: two clocks, no coherent flow. Some planets sped
+ * past while others crawled, depending on which way their orbit was
+ * pointing relative to scroll-driven group rotation. Users couldn't
+ * register what they were looking at.
  *
- * Earlier versions had all seven nodes on a SINGLE shared ring with
- * glowing tubes connecting adjacent nodes. That read as a wired network,
- * not an orbital system. Planets are not linked to each other — they
- * share a star.
+ * v4 model:
+ * - Planets are STATIC at fixed positions around the M (no per-planet
+ *   motion). Each planet has a unique angle, radius, and Y-offset.
+ * - Y-offsets vary planet-to-planet so labels never share screen rows
+ *   (prevents the "all titles stacked on the left" clutter).
+ * - Scroll position within Act 3 (0.355 → 0.48) drives a continuous
+ *   "featured index" 0..7 that smoothly cycles through planets.
+ * - Group rotation lerps so the featured planet always lands closest to
+ *   the camera (+Z foreground). Result: scroll = direct manipulation
+ *   of which planet is being read.
+ * - Featured planet scales 1.8×, glows 5.5× brightness, full title
+ *   visible. Adjacent planets get partial credit via a Gaussian falloff
+ *   (peak 1.0 at featured, ~0.37 at next-door, ~0.02 at opposite side).
+ *   Far-from-featured planets shrink to 0.65× and dim — the visual DoF.
+ * - Hover overrides scroll: rotation lerps to bring the hovered planet
+ *   to foreground, hovered planet expands its full description card.
  *
- * v3 gives each capability its OWN orbit: independent radius, tilt,
- * speed, and phase. No beams. The M is the gravitational centre, the
- * seven planets move independently around it.
- *
- * Hover behaviour:
- *   – When you hover a planet, ALL orbital motion pauses.
- *   – The hovered planet scales up 2.2× and reveals a full card
- *     (code · title · description · index) beside it.
- *   – Other planets dim.
- *   – Release hover, motion resumes from the same angles (no snap back).
+ * Each planet now gets ~1.8% of total scroll (12.5% of Act 3 / 7) — a
+ * full viewport's worth. Stop scrolling = scene parks at that planet.
+ * Scroll fast = camera tour scrolls through planets fast but never
+ * skips a featured-state — the eased rotation guarantees each planet
+ * holds the foreground for ~one viewport.
  */
 
-// Reusable Vector3 allocated once per module so each frame's front-bias
-// calculation doesn't allocate 7 new Vector3s (one per planet).
-const _tmpWorldPos = new THREE.Vector3()
+// Scroll window for Act 3 (must match the camera + alpha fade timings
+// in CameraRig.tsx and CapabilityNodes' act3Alpha smoothFade).
+const ACT3_TOUR_START = 0.365
+const ACT3_TOUR_END = 0.48
+const ACT3_TOUR_SPAN = ACT3_TOUR_END - ACT3_TOUR_START
+const PLANET_COUNT = capabilities.length // 7
 
-interface PlanetOrbit {
-  radius: number
-  speed: number // rad/sec
-  phase: number // initial angle, rad
-  tiltX: number
-  tiltZ: number
-  yBob: number // amplitude of vertical bob along orbit
-  bobFreqMul: number // how many times per full orbit it bobs
+interface PlanetPos {
+  angle: number // radians around Y axis
+  yOffset: number // vertical offset from M's centre — varies so labels stagger
+  radius: number // distance from M centre
 }
 
-// Each capability gets its own orbit. Radii staggered from 1.95 to 3.6
-// (staggered NOT linear — gives an asteroid-belt feel rather than
-// concentric rings). Speeds and tilts picked to feel "natural" — no
-// resonances so planets never align for long.
-const PLANET_ORBITS_DESKTOP: PlanetOrbit[] = [
-  { radius: 2.0, speed: 0.14, phase: 0.0, tiltX: 0.18, tiltZ: 0.05, yBob: 0.12, bobFreqMul: 1 },
-  { radius: 2.4, speed: -0.11, phase: 1.1, tiltX: 0.32, tiltZ: -0.08, yBob: 0.18, bobFreqMul: 1 },
-  { radius: 2.75, speed: 0.095, phase: 2.3, tiltX: -0.12, tiltZ: 0.16, yBob: 0.1, bobFreqMul: 2 },
-  { radius: 3.1, speed: -0.08, phase: 3.6, tiltX: 0.24, tiltZ: -0.12, yBob: 0.14, bobFreqMul: 1 },
-  { radius: 3.35, speed: 0.075, phase: 4.8, tiltX: -0.28, tiltZ: 0.08, yBob: 0.16, bobFreqMul: 2 },
-  { radius: 3.6, speed: -0.065, phase: 5.6, tiltX: 0.38, tiltZ: -0.04, yBob: 0.09, bobFreqMul: 1 },
-  { radius: 3.85, speed: 0.055, phase: 6.5, tiltX: -0.2, tiltZ: 0.14, yBob: 0.12, bobFreqMul: 3 },
-]
+// Spherical-ish distribution. Even angles around the equator, but Y
+// varies in a non-monotonic pattern so planets at NEAR-adjacent angles
+// have DIFFERENT heights. Net: when two planets transit a similar
+// horizontal screen position, their labels stack vertically without
+// overlapping.
+const PLANET_POSITIONS: PlanetPos[] = capabilities.map((_, i) => {
+  // Y pattern designed by hand so no three consecutive planets share a Y band:
+  // [+0.45, -0.55, +0.65, -0.20, +0.55, -0.50, +0.20] — alternating high/low
+  // with subtle variance.
+  const yPattern = [0.45, -0.55, 0.65, -0.2, 0.55, -0.5, 0.2]
+  // Slight radius variance so depth reads even when angles are close.
+  const rPattern = [2.6, 2.45, 2.7, 2.55, 2.65, 2.5, 2.6]
+  return {
+    angle: (i / PLANET_COUNT) * Math.PI * 2,
+    yOffset: yPattern[i] ?? 0,
+    radius: rPattern[i] ?? 2.6,
+  }
+})
 
-// Mobile: tighter radii so the whole system fits in portrait.
-const PLANET_ORBITS_MOBILE: PlanetOrbit[] = PLANET_ORBITS_DESKTOP.map(
-  (o) => ({ ...o, radius: o.radius * 0.62 })
-)
+const PLANET_POSITIONS_MOBILE: PlanetPos[] = PLANET_POSITIONS.map((p) => ({
+  ...p,
+  radius: p.radius * 0.62,
+  yOffset: p.yOffset * 0.7,
+}))
 
 export function CapabilityNodes() {
   const progress = useAppStore((s) => s.scrollProgress)
   const hoveredCapability = useAppStore((s) => s.hoveredCapability)
   const setHoveredCapability = useAppStore((s) => s.setHoveredCapability)
   const { isMobile } = useViewport()
+  const reducedMotion = useReducedMotion()
 
   const groupRef = useRef<THREE.Group>(null!)
-  const PLANET_ORBITS = isMobile ? PLANET_ORBITS_MOBILE : PLANET_ORBITS_DESKTOP
+  const positions = isMobile ? PLANET_POSITIONS_MOBILE : PLANET_POSITIONS
 
-  useFrame((state) => {
+  useFrame(() => {
+    if (!groupRef.current) return
+
     const sp = progress
-    // v5 — aligned with new camera timing. Push at 0.325, settled at
-    // 0.365, hold ends 0.48, push to Act 4 at 0.515. Planets fade
-    // IN 0.30 → 0.365 (during and through the flare, fully visible at
-    // camera settled). Fade OUT 0.49 → 0.515 into Act 3→4 push.
     const act3Alpha = smoothFade(sp, 0.30, 0.365, 0.49, 0.515)
 
-    if (groupRef.current) {
-      // Scroll rotates the whole system slowly. Starts at the settled
-      // frame (0.365), so the system arrives at a stable orientation.
-      // Time drift paused on hover.
-      const scrollRotation = Math.max(0, sp - 0.365) * 2.0
-      const anyHovered = hoveredCapability !== null
-      const idleDrift = anyHovered ? 0 : state.clock.elapsedTime * 0.02
-      groupRef.current.rotation.y = scrollRotation + idleDrift
-      groupRef.current.scale.setScalar(act3Alpha)
-      groupRef.current.visible = act3Alpha > 0.001
+    // Continuous featured index, 0..7 across Act 3 scroll window.
+    // We multiply by PLANET_COUNT (not PLANET_COUNT - 1) so a full
+    // scroll-through cycles through all planets including a brief
+    // pass through the "between planet 6 and planet 0" wrap zone at
+    // the very end of Act 3, easing into the Act 3→4 push frame.
+    const tourT = Math.max(0, Math.min(1, (sp - ACT3_TOUR_START) / ACT3_TOUR_SPAN))
+    let featured = tourT * PLANET_COUNT // 0..7
+
+    // Hover override: bring the hovered planet to foreground regardless
+    // of scroll position. featured snaps to hoveredIndex.
+    if (hoveredCapability !== null) {
+      featured = hoveredCapability
     }
+
+    // Group rotation: position featured planet at world angle π/2
+    // (= positive Z, closest to camera at z=7.8).
+    const angleStep = (Math.PI * 2) / PLANET_COUNT
+    const targetRotY = Math.PI / 2 - featured * angleStep
+
+    // Ease toward target rotation. 0.16 lerp gives ~10 frames to settle —
+    // tight enough that scrolling responds, smooth enough that the
+    // motion reads as cinematic.
+    const cur = groupRef.current.rotation.y
+    // Wrap-aware lerp: pick the shorter of CW vs CCW path so we don't
+    // unwind through 360° when crossing the index 0 boundary.
+    let delta = targetRotY - cur
+    while (delta > Math.PI) delta -= Math.PI * 2
+    while (delta < -Math.PI) delta += Math.PI * 2
+    const lerpAmount = reducedMotion ? 1 : 0.16
+    groupRef.current.rotation.y = cur + delta * lerpAmount
+
+    groupRef.current.scale.setScalar(act3Alpha)
+    groupRef.current.visible = act3Alpha > 0.001
   })
 
   return (
@@ -98,7 +137,7 @@ export function CapabilityNodes() {
           key={cap.id}
           capability={cap}
           index={i}
-          orbit={PLANET_ORBITS[i]}
+          pos={positions[i]}
           hoveredIndex={hoveredCapability}
           onHover={setHoveredCapability}
           isMobile={isMobile}
@@ -109,182 +148,155 @@ export function CapabilityNodes() {
 }
 
 /**
- * CapabilityPlanet — one capability, one orbit. Advances its orbital
- * angle every frame unless any planet is hovered (then it freezes in
- * place so users can read the expanded card).
+ * CapabilityPlanet — one planet, one fixed position. Its appearance
+ * (scale, brightness, label visibility) is driven entirely by the
+ * "featured index" computed from scroll.
  */
 function CapabilityPlanet({
   capability,
   index,
-  orbit,
+  pos,
   hoveredIndex,
   onHover,
   isMobile,
 }: {
   capability: (typeof capabilities)[number]
   index: number
-  orbit: PlanetOrbit
+  pos: PlanetPos
   hoveredIndex: number | null
   onHover: (i: number | null) => void
   isMobile: boolean
 }) {
-  const planetRef = useRef<THREE.Group>(null!)
+  const progress = useAppStore((s) => s.scrollProgress)
   const nodeRef = useRef<THREE.Mesh>(null!)
   const glowRef = useRef<THREE.Mesh>(null!)
   const cardRef = useRef<THREE.Group>(null!)
   const labelRef = useRef<THREE.Group>(null!)
-  const angleRef = useRef(orbit.phase)
-  // Smoothed front-bias — 1 when planet is between camera and origin,
-  // 0 when behind origin (on the far side of the M). Drives label
-  // opacity so back-side labels fade, preventing the mid-screen clutter
-  // where front + back labels stack at similar screen positions.
-  const frontBias = useRef(1)
 
   const isHovered = hoveredIndex === index
   const anyHovered = hoveredIndex !== null
-  const isDimmed = anyHovered && !isHovered
+
+  // STATIC local position from the planet's pos descriptor — no per-frame
+  // angular advance. The group around us rotates with scroll; we just
+  // sit at a fixed offset.
+  const px = Math.cos(pos.angle) * pos.radius
+  const py = pos.yOffset
+  const pz = Math.sin(pos.angle) * pos.radius
+
+  const baseColor = useMemo(() => new THREE.Color('#73C5CC'), [])
 
   const nodeMaterial = useMemo(() => {
     const m = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#73C5CC').multiplyScalar(2.6),
+      color: baseColor.clone().multiplyScalar(2.0),
+      transparent: true,
     })
     m.toneMapped = false
     return m
-  }, [])
+  }, [baseColor])
 
   const glowMaterial = useMemo(() => {
     const m = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#73C5CC').multiplyScalar(1.2),
+      color: baseColor.clone().multiplyScalar(1.2),
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.3,
     })
     m.toneMapped = false
     return m
-  }, [])
+  }, [baseColor])
 
-  useFrame((state, delta) => {
-    // Advance orbit unless something is hovered.
-    if (!anyHovered) {
-      angleRef.current += delta * orbit.speed
+  useFrame(() => {
+    const sp = progress
+
+    // Recompute the featured index for THIS frame so each planet's
+    // featureT lookup is in sync with the group rotation logic.
+    const tourT = Math.max(
+      0,
+      Math.min(1, (sp - ACT3_TOUR_START) / ACT3_TOUR_SPAN)
+    )
+    let featured = tourT * PLANET_COUNT
+    if (hoveredIndex !== null) featured = hoveredIndex
+
+    // Cyclic distance from this planet's index to the featured float.
+    let d = Math.abs(index - featured)
+    d = Math.min(d, PLANET_COUNT - d) // wrap-aware
+
+    // Gaussian falloff. Width 0.65 chosen so:
+    //   d=0 (featured): 1.00
+    //   d=0.5         : 0.74  (mid-transition between two planets)
+    //   d=1 (next-door): 0.30
+    //   d=2           : 0.008 (negligible)
+    const featureT = Math.exp(-(d * d) / 0.65)
+
+    // Scale + brightness lerp.
+    if (nodeRef.current) {
+      // Hover overrides featureT for the hovered planet.
+      const effectiveT = isHovered ? 1.4 : featureT
+      const targetScale = anyHovered && !isHovered
+        ? 0.55
+        : 1.0 + effectiveT * 0.85 // featured 1.85, far 1.0
+      const cur = nodeRef.current.scale.x
+      nodeRef.current.scale.setScalar(cur + (targetScale - cur) * 0.14)
+
+      // Brightness: featured 5.5×, far 1.5×.
+      const mat = nodeRef.current.material as THREE.MeshBasicMaterial
+      const boost = isHovered ? 5.5 : 1.5 + effectiveT * 4.0
+      mat.color = baseColor.clone().multiplyScalar(boost)
+      // Opacity tracks featureT — far planets quietly recede (depth-of-
+      // field via opacity, not actual blur — keeps post-process budget).
+      const targetOpacity = anyHovered && !isHovered
+        ? 0.35
+        : 0.55 + effectiveT * 0.45
+      mat.opacity = mat.opacity + (targetOpacity - mat.opacity) * 0.14
     }
 
-    // Compute planet position from current angle, then apply tilt.
-    const a = angleRef.current
-    let px = Math.cos(a) * orbit.radius
-    let py =
-      Math.sin(a * orbit.bobFreqMul + orbit.phase * 0.7) * orbit.yBob
-    let pz = Math.sin(a) * orbit.radius
-
-    // Apply orbit-plane tilt (rotate around X then Z).
-    const cosX = Math.cos(orbit.tiltX)
-    const sinX = Math.sin(orbit.tiltX)
-    const ty = py * cosX - pz * sinX
-    const tz = py * sinX + pz * cosX
-    py = ty
-    pz = tz
-    const cosZ = Math.cos(orbit.tiltZ)
-    const sinZ = Math.sin(orbit.tiltZ)
-    const tx = px * cosZ - py * sinZ
-    const ty2 = px * sinZ + py * cosZ
-    px = tx
-    py = ty2
-
-    if (planetRef.current) {
-      planetRef.current.position.set(px, py, pz)
-    }
-
-    // Front-bias: measure this planet's world-space Z relative to the
-    // camera. Planets with world-Z closer to the camera (pz > 0 in the
-    // orbit's local frame, but accounting for the parent group rotation)
-    // are "in front" and should show labels. Back-side planets fade.
-    {
-      const worldPos = planetRef.current
-        ? planetRef.current.getWorldPosition(_tmpWorldPos)
-        : null
-      if (worldPos) {
-        const camZ = state.camera.position.z
-        // Planets closer to camera (larger worldPos.z assuming camera at
-        // positive z) get higher frontness. Normalise by orbit radius.
-        const zFromCam = camZ - worldPos.z
-        // frontness = 1 when planet is ~halfway between camera and origin,
-        // 0 when planet is on the far side (beyond origin from camera).
-        const normalized = Math.max(
-          0,
-          Math.min(1, 1 - (zFromCam - camZ * 0.3) / (camZ * 0.9))
-        )
-        frontBias.current += (normalized - frontBias.current) * 0.08
-      }
-    }
-
-    // Scale / dim lerp.
-    const targetScale = isHovered ? 2.2 : isDimmed ? 0.7 : 1.0
-    const current = nodeRef.current
-    if (current) {
-      const pulse =
-        1 + Math.sin(state.clock.elapsedTime * 1.4 + index * 0.7) * 0.12
-      const s = current.scale.x
-      const newS = s + (targetScale * pulse - s) * 0.12
-      current.scale.setScalar(newS)
-
-      // Brightness ramp on hover (colour via material uniforms).
-      const mat = current.material as THREE.MeshBasicMaterial
-      const boost = isHovered ? 5.5 : isDimmed ? 1.2 : 2.6
-      mat.color = new THREE.Color('#73C5CC').multiplyScalar(boost)
-    }
-
-    // Glow halo (wider sphere behind the node).
+    // Glow halo follows featureT — featured planet has a wide aura.
     if (glowRef.current) {
-      const gTarget = isHovered ? 3.4 : isDimmed ? 0.5 : 1.4
-      const cur = glowRef.current.scale.x
-      const next = cur + (gTarget - cur) * 0.1
-      glowRef.current.scale.setScalar(next)
-      ;(glowRef.current.material as THREE.MeshBasicMaterial).opacity =
-        isHovered ? 0.55 : isDimmed ? 0.08 : 0.28
+      const gTarget = isHovered ? 3.4 : 1.0 + featureT * 2.4
+      const c = glowRef.current.scale.x
+      glowRef.current.scale.setScalar(c + (gTarget - c) * 0.12)
+      const gm = glowRef.current.material as THREE.MeshBasicMaterial
+      const gOp = isHovered ? 0.55 : 0.1 + featureT * 0.35
+      gm.opacity = gm.opacity + (gOp - gm.opacity) * 0.14
     }
 
-    // Card fade-in on hover.
+    // Always-visible code label fades with featureT (back-of-tour
+    // planets get nearly-invisible code badges; featured planet's code
+    // is full-bright but hidden when its expanded card is up).
+    if (labelRef.current) {
+      const target = isHovered
+        ? 0
+        : anyHovered
+        ? 0.2
+        : Math.max(0.35, featureT * 1.05)
+      labelRef.current.traverse((obj) => {
+        const mat = (obj as unknown as { material?: THREE.Material }).material
+        if (mat && 'opacity' in mat) {
+          const m = mat as THREE.Material & { opacity: number }
+          m.opacity = m.opacity + (target - m.opacity) * 0.15
+        }
+      })
+    }
+
+    // Expanded card opacity — only this planet's hover triggers it.
     if (cardRef.current) {
       const target = isHovered ? 1 : 0
       cardRef.current.traverse((obj) => {
-        const mat = (obj as unknown as { material?: THREE.Material })
-          .material
+        const mat = (obj as unknown as { material?: THREE.Material }).material
         if (mat && 'opacity' in mat) {
           const m = mat as THREE.Material & { opacity: number }
           m.opacity = m.opacity + (target - m.opacity) * 0.16
         }
       })
     }
-
-    // Apply frontBias to the always-visible label group so back-side
-    // planets fade to near-invisible, clearing the visual clutter at
-    // the middle of the screen where 2-3 labels would otherwise stack.
-    if (labelRef.current) {
-      // When hovered, the card takes over — don't fight it with the label.
-      const labelTarget = isHovered
-        ? 0
-        : isDimmed
-        ? 0.15
-        : Math.pow(frontBias.current, 1.8)
-      labelRef.current.traverse((obj) => {
-        const mat = (obj as unknown as { material?: THREE.Material }).material
-        if (mat && 'opacity' in mat) {
-          const m = mat as THREE.Material & { opacity: number }
-          // Multiply through: label's own material-opacity * frontBias.
-          // Base material-opacity is set to 1.0 on Text JSX below so
-          // this becomes the single source of truth for label opacity.
-          m.opacity = m.opacity + (labelTarget - m.opacity) * 0.16
-        }
-      })
-    }
   })
 
-  // Card positions to the RIGHT of the planet on even indices, LEFT on
-  // odd — so cards don't all collide in the same region of the scene.
-  const cardOnRight = index % 2 === 0
-  const cardOffsetX = cardOnRight ? 0.55 : -0.55
+  // Card position — bias outward from M (radially) so it doesn't overlap
+  // the planet from the camera's perspective.
+  const cardOffsetSign = pos.angle > Math.PI ? -1 : 1
+  const cardOffsetX = cardOffsetSign * 0.55
 
   return (
-    <group ref={planetRef}>
+    <group position={[px, py, pz]}>
       {/* Glow halo */}
       <mesh ref={glowRef} material={glowMaterial}>
         <sphereGeometry args={[0.14, 20, 20]} />
@@ -306,11 +318,9 @@ function CapabilityPlanet({
         <sphereGeometry args={[0.09, 24, 24]} />
       </mesh>
 
-      {/* Always-visible planet label — code + short title stacked so
-          users can read WHICH capability this planet is without having
-          to hover. Front-bias (in useFrame) fades the label group for
-          planets on the far side of the M, preventing mid-screen stack
-          clutter where 3+ titles would overlap. */}
+      {/* Always-visible label — fades with featureT so back-of-tour
+          planets don't compete with the featured one. drei <Billboard>
+          handles lookAt-camera automatically. */}
       <Billboard follow position={[0, isMobile ? 0.22 : 0.3, 0]}>
         <group ref={labelRef}>
           <Text
@@ -352,13 +362,13 @@ function CapabilityPlanet({
         </group>
       </Billboard>
 
-      {/* Expanded card — only animates in on hover */}
+      {/* Expanded hover card — full description in white */}
       <Billboard follow position={[cardOffsetX, 0, 0]}>
         <group ref={cardRef}>
           <Text
             fontSize={0.08}
             color="#73C5CC"
-            anchorX={cardOnRight ? 'left' : 'right'}
+            anchorX={cardOffsetSign > 0 ? 'left' : 'right'}
             anchorY="bottom"
             position={[0, 0.24, 0]}
             letterSpacing={0.3}
@@ -372,12 +382,12 @@ function CapabilityPlanet({
           <Text
             fontSize={isMobile ? 0.16 : 0.22}
             color="#FFFFFF"
-            anchorX={cardOnRight ? 'left' : 'right'}
+            anchorX={cardOffsetSign > 0 ? 'left' : 'right'}
             anchorY="top"
             position={[0, 0.16, 0]}
             fontWeight={700}
             maxWidth={isMobile ? 1.6 : 2.6}
-            textAlign={cardOnRight ? 'left' : 'right'}
+            textAlign={cardOffsetSign > 0 ? 'left' : 'right'}
             outlineWidth={0}
             material-toneMapped={false}
             material-transparent={true}
@@ -388,11 +398,11 @@ function CapabilityPlanet({
           <Text
             fontSize={0.075}
             color="#B8C0C0"
-            anchorX={cardOnRight ? 'left' : 'right'}
+            anchorX={cardOffsetSign > 0 ? 'left' : 'right'}
             anchorY="top"
             position={[0, -0.35, 0]}
             maxWidth={isMobile ? 1.6 : 2.6}
-            textAlign={cardOnRight ? 'left' : 'right'}
+            textAlign={cardOffsetSign > 0 ? 'left' : 'right'}
             outlineWidth={0}
             material-toneMapped={false}
             material-transparent={true}
