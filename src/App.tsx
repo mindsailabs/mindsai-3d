@@ -4,6 +4,7 @@ import { Nav, NavLogo } from './components/Nav'
 import { AudioSystem } from './components/AudioSystem'
 import { OpeningFade } from './components/OpeningFade'
 import { RouteErrorBoundary } from './components/RouteErrorBoundary'
+import { AtmosphereBackdrop } from './components/AtmosphereBackdrop'
 import { Home } from './pages/Home'
 
 // Non-home routes lazy-loaded so the initial home-page bundle doesn't
@@ -71,29 +72,13 @@ function SharedLayout({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
 
-      {/* Atmospheric video layer — Veo-3.1-generated seamless loop of
-          drifting teal light strata + particles. Sits BEHIND every page's
-          WebGL canvas. Covers the whole viewport with object-fit:cover. */}
-      <div className="fixed inset-0 z-0 pointer-events-none bg-black overflow-hidden">
-        <video
-          src="/assets/atmosphere_loop.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ opacity: 0.55 }}
-          aria-hidden="true"
-        />
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              'radial-gradient(ellipse 90% 70% at center, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.6) 85%, rgba(0,0,0,0.95) 100%)',
-          }}
-        />
-      </div>
+      {/* Atmospheric video layer — Veo 3.1 seamless loop of drifting
+          teal light strata + particles. Sits BEHIND every page's WebGL
+          canvas. The backdrop's CSS filter (blur + saturate + brightness)
+          is driven by Lenis scroll velocity so the entire scene reacts
+          to motion in concert with the foreground media-plane shaders.
+          Reduced-motion-aware. */}
+      <AtmosphereBackdrop />
 
       <main id="main-content">{children}</main>
 

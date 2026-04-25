@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 /**
@@ -105,10 +106,18 @@ function NavButton({ label, onClick, asLink, to }: NavButtonProps) {
   // pill stays visually compact while taps land reliably.
   const className =
     'relative text-[9px] md:text-[11px] uppercase tracking-[0.1em] md:tracking-[0.2em] font-medium text-text-primary/80 hover:text-brand-teal px-1 md:px-2 py-1 transition-colors duration-300 ' +
-    "after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3 md:after:inset-0"
+    "after:content-[''] after:absolute after:inset-x-0 after:-inset-y-3 md:after:inset-0 will-change-transform"
+
+  // Magnetic effect — track cursor proximity, gently pull the button
+  // toward the cursor when within ~80px. Premium-site interaction
+  // pattern (Awwwards-tier). Disabled on touch and on reduced-motion.
+  const ref = useRef<HTMLAnchorElement & HTMLButtonElement>(null)
+  useMagneticPull(ref)
+
   if (asLink && to) {
     return (
       <Link
+        ref={ref as unknown as React.Ref<HTMLAnchorElement>}
         to={to}
         className={className}
         onMouseEnter={() => prefetchRoute(to)}
@@ -120,10 +129,80 @@ function NavButton({ label, onClick, asLink, to }: NavButtonProps) {
     )
   }
   return (
-    <button onClick={onClick} className={className}>
+    <button
+      ref={ref as unknown as React.Ref<HTMLButtonElement>}
+      onClick={onClick}
+      className={className}
+    >
       {label}
     </button>
   )
+}
+
+/**
+ * useMagneticPull — gentle cursor-attraction effect on hover-capable
+ * pointers. When the cursor is within ~80px of the element's centre,
+ * the element translates toward the cursor by a fraction of the
+ * displacement (max ~12px). Releases smoothly when the cursor leaves
+ * the proximity zone.
+ *
+ * Skipped on coarse pointers (touch) and reduced-motion.
+ */
+function useMagneticPull(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    // Skip on touch devices — magnetic pull only makes sense with a
+    // freely-moving cursor.
+    if (window.matchMedia('(pointer: coarse)').matches) return
+    // Skip on reduced-motion.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    const el = ref.current
+    if (!el) return
+
+    let raf = 0
+    let targetX = 0
+    let targetY = 0
+    let curX = 0
+    let curY = 0
+
+    function onMove(e: MouseEvent) {
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      const dx = e.clientX - cx
+      const dy = e.clientY - cy
+      const dist = Math.hypot(dx, dy)
+      const radius = 80
+      if (dist < radius) {
+        // Pull strength scales with proximity. Max pull = 12px.
+        const pull = (1 - dist / radius) * 0.35
+        targetX = dx * pull
+        targetY = dy * pull
+      } else {
+        targetX = 0
+        targetY = 0
+      }
+    }
+
+    function tick() {
+      curX += (targetX - curX) * 0.18
+      curY += (targetY - curY) * 0.18
+      if (el) {
+        el.style.transform = `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0)`
+      }
+      raf = requestAnimationFrame(tick)
+    }
+
+    window.addEventListener('mousemove', onMove, { passive: true })
+    raf = requestAnimationFrame(tick)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      cancelAnimationFrame(raf)
+      if (el) el.style.transform = ''
+    }
+  }, [ref])
 }
 
 /**
