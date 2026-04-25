@@ -4,6 +4,7 @@ import { Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { outcomes, smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
+import { DistortedMediaPlane } from './DistortedMediaPlane'
 
 /**
  * Four outcome panels orbit the M during Act 2. Each panel has a composite
@@ -282,29 +283,22 @@ function AnglingPanel({
   borderGeom,
   currentRotationRef,
 }: AnglingPanelProps) {
-  // Frontness state only drives imperative material/scale updates inside
-  // useFrame — we don't render it, so we skip the value from destructuring
-  // to keep TS strict-mode happy.
-  const [, setFrontness] = useState(0)
+  // Frontness state — re-rendered to drive the DistortedMediaPlane's
+  // `hovered` prop (which gives the featured panel a low-grade always-on
+  // ripple even when scroll is idle).
+  const [frontness, setFrontness] = useState(0)
   // Emerge group wraps the Billboard. Its position lerps from (0,0,0) to the
   // panel's orbital target over a per-panel staggered window early in Act 2,
   // so the panels visibly FLY OUT FROM THE M'S CENTRE rather than appearing
   // already-in-position. Panel scale also ramps 0→1 across the same window.
   const emergeGroupRef = useRef<THREE.Group>(null!)
   const panelScaleRef = useRef<THREE.Group>(null!)
+  // Latest computed plane opacity — written each frame, read by the
+  // DistortedMediaPlane's onFrame callback to push uOpacity uniform.
+  const planeOpacityRef = useRef(0.05)
   const image = useHtmlImage(bgSrc)
   const texture = useCompositeTexture(image, index, title, description)
   const progress = useAppStore((s) => s.scrollProgress)
-
-  const panelMat = useMemo(() => {
-    if (!texture) return null
-    return new THREE.MeshBasicMaterial({
-      map: texture,
-      transparent: true,
-      opacity: 0.05,
-      toneMapped: false,
-    })
-  }, [texture])
 
   // Per-panel border material so we can fade each panel's frame independently
   // based on its frontness (the shared prop would affect all panels at once).
@@ -366,23 +360,36 @@ function AnglingPanel({
       emergenceT + frontOpacity
     )
 
-    if (panelMat) {
-      panelMat.opacity = emergenceOpacity
-    }
+    // Push the computed opacity into the ref the DistortedMediaPlane
+    // reads each frame (avoids React re-renders).
+    planeOpacityRef.current = emergenceOpacity
+
     if (borderMat) {
       borderMat.opacity = Math.min(0.8, emergenceT * 0.6 + Math.pow(f, 3.0) * 0.7)
     }
   })
 
-  if (!panelMat) return null
+  if (!texture) return null
 
   return (
     <group ref={emergeGroupRef}>
       <Billboard follow={true}>
         <group ref={panelScaleRef}>
-          <mesh material={panelMat}>
-            <planeGeometry args={[PANEL_WIDTH, PANEL_HEIGHT]} />
-          </mesh>
+          {/* Shader-distorted panel. The composited canvas texture
+              (background image + baked-in title/description) is rendered
+              through the same scroll-velocity ripple/CA/pixelate shader
+              as WorkOrbit cards. Featured (front-facing) panel gets a
+              subtle always-on ripple via the hovered prop. */}
+          <DistortedMediaPlane
+            texture={texture}
+            width={PANEL_WIDTH}
+            height={PANEL_HEIGHT}
+            hovered={frontness > 0.7}
+            opacity={planeOpacityRef.current}
+            onFrame={(mat) => {
+              mat.uniforms.uOpacity.value = planeOpacityRef.current
+            }}
+          />
           <lineSegments>
             <bufferGeometry attach="geometry" {...borderGeom} />
             <primitive object={borderMat} attach="material" />

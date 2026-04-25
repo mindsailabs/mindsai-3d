@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { caseStudies, smoothFade } from '../lib/copy'
 import { useAppStore } from '../lib/store'
+import { DistortedMediaPlane } from './DistortedMediaPlane'
 
 /**
  * Work carousel — 6 case-study cards orbit the M with SNAP scroll behavior.
@@ -196,19 +197,32 @@ function CardMesh({ binding, isFeatured, frontness }: CardMeshProps) {
 
   return (
     <group ref={groupRef}>
-      <mesh>
-        <planeGeometry args={[CARD_HEIGHT_BASE * CARD_ASPECT, CARD_HEIGHT_BASE]} />
-        {binding ? (
-          <meshBasicMaterial
-            map={binding.texture}
-            toneMapped={false}
-            transparent
-            opacity={cardOpacity}
+      {binding ? (
+        // Shader-distorted video plane. Scroll velocity drives ripple
+        // warp + chromatic aberration + pixelation; on idle the video
+        // plays crisp. Featured card gets a low-grade always-on ripple
+        // via the `hovered` prop so it reads as actively playing.
+        <DistortedMediaPlane
+          texture={binding.texture}
+          width={CARD_HEIGHT_BASE * CARD_ASPECT}
+          height={CARD_HEIGHT_BASE}
+          hovered={isFeatured}
+          opacity={cardOpacity}
+          onFrame={(mat) => {
+            // Card opacity changes with frontness — push it through
+            // the shader's uOpacity uniform so the fade composites
+            // correctly with the distortion alpha.
+            mat.uniforms.uOpacity.value = cardOpacity
+          }}
+        />
+      ) : (
+        <mesh>
+          <planeGeometry
+            args={[CARD_HEIGHT_BASE * CARD_ASPECT, CARD_HEIGHT_BASE]}
           />
-        ) : (
           <primitive object={fallbackMat} attach="material" />
-        )}
-      </mesh>
+        </mesh>
+      )}
       <lineSegments>
         <bufferGeometry attach="geometry" {...borderGeom} />
         <primitive object={borderMat} attach="material" />
